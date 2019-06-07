@@ -44,17 +44,22 @@ func (v *Validator) SetAddressbook(addressbook []*Channel) {
 	v.addressbook = addressbook
 }
 
-func (v *Validator) Start(wg *sync.WaitGroup) {
+func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	// Add pre-genesis block
+	v.blocks = append(v.blocks, Block{
+		height: 0,
+		// pre-genesis block timestamp is set "blockTime" before genesis time
+		timestamp: genesisTime.Add(-(1 * time.Second)).UnixNano(),
+	})
+
 	for {
-		var recentBlock *Block = nil
-		if len(v.blocks) > 0 {
-			recentBlock = &v.blocks[len(v.blocks)-1]
-		}
+		recentBlock := &v.blocks[len(v.blocks)-1]
 
 		// For genesis block and next one
 		next := 0
-		if len(v.blocks) >= 2 {
+		if recentBlock.height >= 2 {
 			// calculation
 			sum := 0
 			for _, value := range recentBlock.signatures {
@@ -64,7 +69,7 @@ func (v *Validator) Start(wg *sync.WaitGroup) {
 		}
 
 		signatures := make([]int, len(v.addressbook))
-		if len(v.blocks) >= 1 {
+		if recentBlock.height >= 1 {
 			for i := 0; i < len(v.addressbook); i += 1 {
 				signatures[i] = v.inbound.readSignature()
 			}
@@ -72,16 +77,13 @@ func (v *Validator) Start(wg *sync.WaitGroup) {
 
 		if next == v.id {
 			// My turn
-			nextBlockTime := time.Now()
-			if recentBlock != nil {
-				now := nextBlockTime
-				nextBlockTime = time.Unix(0, recentBlock.timestamp).Add(v.blockTime)
-				time.Sleep(nextBlockTime.Sub(now))
-			}
+			now := time.Now()
+			nextBlockTime := time.Unix(0, recentBlock.timestamp).Add(v.blockTime)
+			time.Sleep(nextBlockTime.Sub(now))
 
 			// Produce new block
 			newBlock := Block{
-				height:     len(v.blocks),
+				height:     recentBlock.height + 1,
 				timestamp:  nextBlockTime.UnixNano(),
 				producer:   v.id,
 				signatures: signatures,

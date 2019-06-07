@@ -20,7 +20,9 @@ func main() {
 	wg.Add(len(validators))
 	for _, validator := range validators {
 		validator.SetAddressbook(addressbook)
-		go validator.Start(&wg)
+		// Genesis time for testing
+		genesisTime := time.Now().Add(1 * time.Second).Round(1 * time.Second)
+		go validator.Start(genesisTime, &wg)
 	}
 
 	wg.Wait()
