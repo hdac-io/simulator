@@ -9,10 +9,10 @@ import (
 func main() {
 	const blockTime = 1 * time.Second
 	const numValidator = 3
-	validators := make([]*consensus.Validator, numValidator)
-	addressbook := make([]*consensus.Channel, numValidator)
+	validators := make([]*friday_consensus.Validator, numValidator)
+	addressbook := make([]*friday_consensus.Channel, numValidator)
 	for id, _ := range validators {
-		validators[id] = consensus.NewValidator(id, blockTime)
+		validators[id] = friday_consensus.NewValidator(id, blockTime)
 		addressbook[id] = validators[id].GetAddress()
 	}
 
