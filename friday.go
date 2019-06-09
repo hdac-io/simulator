@@ -1,7 +1,7 @@
 package main
 
 import (
-	"friday/simulator/consensus"
+	"simulator/friday_consensus"
 	"sync"
 	"time"
 )

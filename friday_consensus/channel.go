@@ -1,4 +1,4 @@
-package consensus
+package friday_consensus
 
 import (
 	"time"

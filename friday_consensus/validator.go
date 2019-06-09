@@ -1,7 +1,7 @@
-package consensus
+package friday_consensus
 
 import (
-	"friday/simulator/util"
+	"simulator/util"
 	"math/rand"
 	"sync"
 	"time"
