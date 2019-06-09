@@ -1,10 +1,11 @@
-package friday_consensus
+package fridayconsensus
 
 import (
 	"fmt"
 	"time"
 )
 
+// Block represents simple block structure
 type Block struct {
 	height     int
 	timestamp  int64

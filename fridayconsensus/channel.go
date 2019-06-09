@@ -1,14 +1,16 @@
-package friday_consensus
+package fridayconsensus
 
 import (
 	"time"
 )
 
+// Channel represents inbound and outbound channel
 type Channel struct {
 	block     chan Block
 	signature chan int
 }
 
+// NewChannel construct channel
 func NewChannel() *Channel {
 	n := Channel{
 		block: make(chan Block, 1),

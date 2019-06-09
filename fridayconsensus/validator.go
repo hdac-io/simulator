@@ -1,12 +1,13 @@
-package friday_consensus
+package fridayconsensus
 
 import (
-	"simulator/util"
 	"math/rand"
+	"simulator/util"
 	"sync"
 	"time"
 )
 
+// Validator represents validator node
 type Validator struct {
 	id          int
 	blockTime   time.Duration
@@ -24,6 +25,7 @@ func randomSignature(unique int) func(int) int {
 	}
 }
 
+// NewValidator construct validator
 func NewValidator(id int, blockTime time.Duration) *Validator {
 	v := Validator{
 		id:        id,
@@ -36,14 +38,17 @@ func NewValidator(id int, blockTime time.Duration) *Validator {
 	return &v
 }
 
+// GetAddress retrun validator's inbound address
 func (v *Validator) GetAddress() *Channel {
 	return v.inbound
 }
 
+// SetAddressbook sets validators` address
 func (v *Validator) SetAddressbook(addressbook []*Channel) {
 	v.addressbook = addressbook
 }
 
+// Start starts validator with genesis time
 func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -70,8 +75,8 @@ func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 
 		signatures := make([]int, len(v.addressbook))
 		if recentBlock.height >= 1 {
-			for i := 0; i < len(v.addressbook); i += 1 {
-				signatures[i] = v.inbound.readSignature()
+			for index := range signatures {
+				signatures[index] = v.inbound.readSignature()
 			}
 		}
 
