@@ -2,10 +2,10 @@ package fridayconsensus
 
 import (
 	"math/rand"
-	"simulator/network"
-	"simulator/util"
 	"sync"
 	"time"
+	"github.com/hdac-io/simulator/network"
+	"github.com/hdac-io/simulator/util/log"
 )
 
 // Validator represents validator node
@@ -15,9 +15,9 @@ type Validator struct {
 	getRandom       func() int
 	peer            *channel
 	addressbook     []*network.Network
-	blocks          []block
+	blocks        []types.Block
 	pool            *signaturepool
-	signatures      [][]signature
+	signatures      [][]types.Signature
 	finalizedHeight int
 	completedHeight int
 	height          int
@@ -48,14 +48,14 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		parameter: parameter,
 		id:        id,
 		peer:      newChannel(),
-		blocks:    make([]block, 0, 1024),
+		blocks:        make([]types.Block, 0, 1024),
 		pool:      newSignaturePool(),
 	}
 
 	// Add dummy block
-	v.blocks = append(v.blocks, block{})
+	v.blocks = append(v.blocks, types.Block{})
 	// Add dummy signatures
-	v.signatures = append(v.signatures, []signature{})
+	v.signatures = append(v.signatures, []types.Signature{})
 
 	return v
 }
@@ -128,28 +128,32 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 		// My turn
 
 		// Produce new block
-		newBlock := block{
-			height:       v.height + 1,
-			timestamp:    nextBlockTime.UnixNano(),
-			producer:     v.id,
-			chosenNumber: chosenNumber,
+		newBlock := types.Block{
+			Height:       v.height + 1,
+			Timestamp:    nextBlockTime.UnixNano(),
+			Producer:     v.id,
+			ChosenNumber: chosenNumber,
 		}
 
 		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
+		v.logger.Info("Block produced", newBlock,
+		 "Height", newBlock.Height,
+		 "Timestmp", time.Unix(newBlock.Timestamp),
+		 "Producer", newBlock.Producer,
+		 "ChoosenNumber", newBlock.ChoosenNumber)
 
-		util.Log("#", v.id, "Block produced\n", newBlock)
 	}
 
 	return nextBlockTime.Add(v.parameter.blockTime)
 }
 
-func (v *Validator) validateBlock(b block) {
+func (v *Validator) validateBlock(b types.Block) {
 	// Validation
 	if !v.validate() {
 		return
 	}
-	v.height = b.height
+	v.height = b.Height
 	if v.height > v.parameter.lenULB {
 		v.completedHeight = v.height - v.parameter.lenULB
 	} else {
@@ -157,31 +161,34 @@ func (v *Validator) validateBlock(b block) {
 		v.completedHeight = 0
 	}
 	v.blocks = append(v.blocks, b)
-	util.Log("#", v.id, "Block received. Blockheight =", b.height)
+	v.logger.Info("Block received",
+	. Blockheight", b.Height)
 
 	// prepare
 	v.prepare(b)
-	util.Log("#", v.id, "Block prepared. Blockheight =", b.height)
+	v.logger.Info("Block prepared.",
+	"Blockheight", b.Height)
 
 	// commit
 	v.finalize(b)
-	util.Log("#", v.id, "Block finalized. Blockheight =", b.height)
+	v.logger.Info("Block finalized",
+	"Blockheight", b.Height)
 }
 
-func (v *Validator) prepare(b block) {
+func (v *Validator) prepare(b types.Block) {
 	// Generate random signature
-	sig := newSignature(v.id, b.height, v.getRandom())
+	sig := newSignature(v.id, b.Height, v.getRandom())
 
 	// Send piece to others
 	v.peer.sendSignature(sig)
 
 	// Collect signatues
-	v.pool.waitAndRemove(b.height, v.parameter.numValidators)
+	v.pool.waitAndRemove(b.Height, v.parameter.numValidators)
 }
 
-func (v *Validator) finalize(b block) {
+func (v *Validator) finalize(b types.Block) {
 	// Generate random signature
-	sig := newSignature(v.id, b.height, v.getRandom())
+	sig := newSignature(v.id, b.Height, v.getRandom())
 
 	// Send piece to others
 	v.peer.sendSignature(sig)
@@ -190,7 +197,7 @@ func (v *Validator) finalize(b block) {
 	sigs := v.pool.waitAndRemove(b.height, v.parameter.numValidators)
 	v.signatures = append(v.signatures, sigs)
 	// Finalize
-	v.finalizedHeight = b.height
+	v.finalizedHeight = b.Height
 }
 
 func (v *Validator) validate() bool {
@@ -210,10 +217,10 @@ func (v *Validator) getCompletedBlock() block {
 	return v.blocks[v.completedHeight]
 }
 
-func (v *Validator) getRandomNumberFromSignatures(sig []signature) int {
+func (v *Validator) getRandomNumberFromSignatures(sig []types.Signature) int {
 	sum := 0
 	for _, value := range sig {
-		sum += value.number
+		sum += value.Number
 	}
 	return sum % (v.parameter.numValidators)
 }
