@@ -1,13 +1,17 @@
 package main
 
 import (
-	"simulator/fridayconsensus"
-	"simulator/network"
+	"github.com/hdac-io/simulator/fridayconsensus"
+    "github.com/hdac-io/simulator/network"
+	"github.com/hdac-io/simulator/util/log"
 	"sync"
 	"time"
 )
 
 // Block time
+	logger := log.New("module", "main")
+	logger.Info("Initialize Validators and AddressBooks")
+
 const blockTime time.Duration = 1 * time.Second
 
 // Number of validators
