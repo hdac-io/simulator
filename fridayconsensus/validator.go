@@ -2,6 +2,7 @@ package fridayconsensus
 
 import (
 	"math/rand"
+	"simulator/network"
 	"simulator/util"
 	"sync"
 	"time"
@@ -11,49 +12,45 @@ import (
 type Validator struct {
 	id          int
 	blockTime   time.Duration
-	getRandom   func(int) int
-	inbound     *Channel
-	addressbook []*Channel
-	blocks      []Block
+	getRandom   func() int
+	peer        *channel
+	addressbook []*network.Network
+	blocks      []block
 }
 
-func randomSignature(unique int) func(int) int {
+func randomSignature(unique int, max int) func() int {
 	seed := int64(time.Now().Nanosecond() + unique)
 	random := rand.New(rand.NewSource(seed))
-	return func(max int) int {
+	return func() int {
 		return random.Intn(max)
 	}
 }
 
-// NewValidator construct validator
+// NewValidator construct Validator
 func NewValidator(id int, blockTime time.Duration) *Validator {
-	v := Validator{
+	return &Validator{
 		id:        id,
 		blockTime: blockTime,
-		getRandom: randomSignature(id),
-		inbound:   NewChannel(),
-		blocks:    make([]Block, 0, 1024),
+		peer:      newChannel(),
+		blocks:    make([]block, 0, 1024),
 	}
-
-	return &v
 }
 
-// GetAddress retrun validator's inbound address
-func (v *Validator) GetAddress() *Channel {
-	return v.inbound
-}
-
-// SetAddressbook sets validators` address
-func (v *Validator) SetAddressbook(addressbook []*Channel) {
-	v.addressbook = addressbook
+// GetAddress returns validator's inbound address
+func (v *Validator) GetAddress() *network.Network {
+	return v.peer.inbound.network
 }
 
 // Start starts validator with genesis time
-func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
+func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	v.getRandom = randomSignature(v.id, len(addressbook))
+	v.addressbook = addressbook
+	v.peer.start(addressbook)
+
 	// Add pre-genesis block
-	v.blocks = append(v.blocks, Block{
+	v.blocks = append(v.blocks, block{
 		height: 0,
 		// pre-genesis block timestamp is set "blockTime" before genesis time
 		timestamp: genesisTime.Add(-(1 * time.Second)).UnixNano(),
@@ -76,7 +73,7 @@ func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 		signatures := make([]int, len(v.addressbook))
 		if recentBlock.height >= 1 {
 			for index := range signatures {
-				signatures[index] = v.inbound.readSignature()
+				signatures[index] = v.peer.readSignature()
 			}
 		}
 
@@ -87,7 +84,7 @@ func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 			time.Sleep(nextBlockTime.Sub(now))
 
 			// Produce new block
-			newBlock := Block{
+			newBlock := block{
 				height:     recentBlock.height + 1,
 				timestamp:  nextBlockTime.UnixNano(),
 				producer:   v.id,
@@ -95,14 +92,12 @@ func (v *Validator) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 			}
 
 			// Send new block
-			for _, peer := range v.addressbook {
-				peer.sendBlock(newBlock)
-			}
+			v.peer.sendBlock(newBlock)
 			util.Log("#", v.id, "Block produced\n", newBlock)
 		} else {
 			// Not my turn
 		}
-		block := v.inbound.readBlock()
+		block := v.peer.readBlock()
 		v.receiveBlock(block)
 	}
 }
@@ -111,7 +106,7 @@ func (v *Validator) stop() {
 	// Clean validator up
 }
 
-func (v *Validator) receiveBlock(b Block) {
+func (v *Validator) receiveBlock(b block) {
 	// Validation
 	if !v.validate() {
 		return
@@ -128,15 +123,13 @@ func (v *Validator) receiveBlock(b Block) {
 
 func (v *Validator) preCommit() {
 	// generate random signature
-	sig := v.getRandom(len(v.addressbook))
+	sig := v.getRandom()
 
 	// send piece to others
-	for _, peer := range v.addressbook {
-		peer.sendSignature(sig)
-	}
+	v.peer.sendSignature(sig)
 }
 
-func (v *Validator) commit(b Block) {
+func (v *Validator) commit(b block) {
 	v.blocks = append(v.blocks, b)
 }
 

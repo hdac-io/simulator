@@ -1,48 +1,87 @@
 package fridayconsensus
 
 import (
-	"time"
+	"simulator/network"
 )
 
-// Channel represents inbound and outbound channel
-type Channel struct {
-	block     chan Block
-	signature chan int
+// channel represents inbound and outbound channel
+type channel struct {
+	inbound  peer
+	outbound []peer
 }
 
-// NewChannel construct channel
-func NewChannel() *Channel {
-	n := Channel{
-		block: make(chan Block, 1),
-		// FIXME: We should make P2P channel
-		signature: make(chan int, 3),
+type peer struct {
+	block     chan block
+	signature chan int
+	network   *network.Network
+}
+
+func newPeer(network *network.Network) peer {
+	return peer{
+		block:     make(chan block, 1024),
+		signature: make(chan int, 1024),
+		network:   network,
+	}
+}
+
+// newChannel construct channel
+func newChannel() *channel {
+	c := channel{
+		inbound: newPeer(network.NewNetwork()),
 	}
 
-	return &n
+	return &c
 }
 
-func (c *Channel) sendSignature(sig int) {
+// start starts Channel architecture
+func (c *channel) start(peers []*network.Network) {
+	// Start reader
 	go func() {
-		networkDelay()
-		c.signature <- sig
+		for {
+			load := c.inbound.network.Read()
+			switch v := load.(type) {
+			case block:
+				c.inbound.block <- v
+			case int:
+				c.inbound.signature <- v
+			}
+		}
 	}()
+
+	// Start writer
+	for _, p := range peers {
+		outbound := newPeer(p)
+		go func(outbound peer) {
+			for {
+				select {
+				case load := <-outbound.signature:
+					outbound.network.Write(load)
+				case load := <-outbound.block:
+					outbound.network.Write(load)
+				}
+			}
+		}(outbound)
+
+		c.outbound = append(c.outbound, outbound)
+	}
 }
 
-func (c *Channel) sendBlock(block Block) {
-	go func() {
-		networkDelay()
-		c.block <- block
-	}()
+func (c *channel) sendSignature(sig int) {
+	for _, out := range c.outbound {
+		out.signature <- sig
+	}
 }
 
-func (c *Channel) readSignature() int {
-	return <-c.signature
+func (c *channel) sendBlock(b block) {
+	for _, out := range c.outbound {
+		out.block <- b
+	}
 }
 
-func (c *Channel) readBlock() Block {
-	return <-c.block
+func (c *channel) readSignature() int {
+	return <-c.inbound.signature
 }
 
-func networkDelay() {
-	time.Sleep(200 * time.Millisecond)
+func (c *channel) readBlock() block {
+	return <-c.inbound.block
 }
