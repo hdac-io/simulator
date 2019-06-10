@@ -1,7 +1,7 @@
 package main
 
 import (
-	"simulator/friday_consensus"
+	"simulator/fridayconsensus"
 	"sync"
 	"time"
 )
@@ -9,10 +9,10 @@ import (
 func main() {
 	const blockTime time.Duration = 1 * time.Second
 	const numValidator int = 3
-	validators := make([]*friday_consensus.Validator, numValidator)
-	addressbook := make([]*friday_consensus.Channel, numValidator)
+	validators := make([]*fridayconsensus.Validator, numValidator)
+	addressbook := make([]*fridayconsensus.Channel, numValidator)
 	for id := range validators {
-		validators[id] = friday_consensus.NewValidator(id, blockTime)
+		validators[id] = fridayconsensus.NewValidator(id, blockTime)
 		addressbook[id] = validators[id].GetAddress()
 	}
 
