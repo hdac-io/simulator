@@ -1,15 +1,11 @@
 package fridayconsensus
 
-type signature struct {
-	id          int
-	blockHeight int
-	number      int
-}
+import "github.com/hdac-io/simulator/types"
 
-func newSignature(id int, height int, number int) signature {
-	return signature{
-		id:          id,
-		blockHeight: height,
-		number:      number,
+func newSignature(id int, height int, number int) types.Signature {
+	return types.Signature{
+		Id:          id,
+		BlockHeight: height,
+		Number:      number,
 	}
 }

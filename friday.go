@@ -1,30 +1,24 @@
 package main
 
 import (
-	"github.com/hdac-io/simulator/fridayconsensus"
-    "github.com/hdac-io/simulator/network"
-	"github.com/hdac-io/simulator/util/log"
 	"sync"
 	"time"
+
+	simulcfg "github.com/hdac-io/simulator/config"
+	"github.com/hdac-io/simulator/fridayconsensus"
+	"github.com/hdac-io/simulator/network"
+	log "github.com/inconshreveable/log15"
 )
 
-// Block time
+func main() {
 	logger := log.New("module", "main")
 	logger.Info("Initialize Validators and AddressBooks")
 
-const blockTime time.Duration = 1 * time.Second
-
-// Number of validators
-const numValidators int = 3
-
-// Length of Uncompleted Leading Blocks
-const lenULB = 2
-
-func main() {
-	validators := make([]*fridayconsensus.Validator, numValidators)
-	addressbook := make([]*network.Network, numValidators)
+	cfg := simulcfg.TestConfig()
+	validators := make([]*fridayconsensus.Validator, cfg.Consensus.NumValidators)
+	addressbook := make([]*network.Network, cfg.Consensus.NumValidators)
 	for id := range validators {
-		validators[id] = fridayconsensus.NewValidator(id, blockTime, numValidators, lenULB)
+		validators[id] = fridayconsensus.NewValidator(id, cfg.Consensus.BlockTime, cfg.Consensus.NumValidators, cfg.Consensus.LenULB)
 		addressbook[id] = validators[id].GetAddress()
 	}
 
