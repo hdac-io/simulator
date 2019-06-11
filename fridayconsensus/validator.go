@@ -16,6 +16,11 @@ type Validator struct {
 	peer        *channel
 	addressbook []*network.Network
 	blocks      []block
+	signatures  []signature
+}
+
+type signature struct {
+	signatures []int
 }
 
 func randomSignature(unique int, max int) func() int {
@@ -56,50 +61,50 @@ func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network,
 		timestamp: genesisTime.Add(-(1 * time.Second)).UnixNano(),
 	})
 
+	v.receive()
+}
+
+func (v *Validator) receive() {
 	for {
 		recentBlock := &v.blocks[len(v.blocks)-1]
 
-		// For genesis block and next one
-		next := 0
-		if recentBlock.height >= 2 {
-			// calculation
-			sum := 0
-			for _, value := range recentBlock.signatures {
-				sum += value
-			}
-			next = sum % (len(v.addressbook))
+		// calculation
+		sum := 0
+		for _, value := range recentBlock.signatures.signatures {
+			sum += value
 		}
-
-		signatures := make([]int, len(v.addressbook))
-		if recentBlock.height >= 1 {
-			for index := range signatures {
-				signatures[index] = v.peer.readSignature()
-			}
-		}
+		next := sum % (len(v.addressbook))
 
 		if next == v.id {
 			// My turn
-			now := time.Now()
-			nextBlockTime := time.Unix(0, recentBlock.timestamp).Add(v.blockTime)
-			time.Sleep(nextBlockTime.Sub(now))
-
-			// Produce new block
-			newBlock := block{
-				height:     recentBlock.height + 1,
-				timestamp:  nextBlockTime.UnixNano(),
-				producer:   v.id,
-				signatures: signatures,
-			}
-
-			// Send new block
-			v.peer.sendBlock(newBlock)
-			util.Log("#", v.id, "Block produced\n", newBlock)
-		} else {
-			// Not my turn
+			go v.produce(recentBlock)
 		}
+
 		block := v.peer.readBlock()
 		v.receiveBlock(block)
 	}
+}
+
+func (v *Validator) produce(recentBlock *block) {
+	now := time.Now()
+	nextBlockTime := time.Unix(0, recentBlock.timestamp).Add(v.blockTime)
+	time.Sleep(nextBlockTime.Sub(now))
+
+	signatures := signature{}
+	if len(v.signatures) >= 1 {
+		signatures = v.signatures[len(v.signatures)-1]
+	}
+	// Produce new block
+	newBlock := block{
+		height:     recentBlock.height + 1,
+		timestamp:  nextBlockTime.UnixNano(),
+		producer:   v.id,
+		signatures: signatures,
+	}
+
+	// Send new block
+	v.peer.sendBlock(newBlock)
+	util.Log("#", v.id, "Block produced\n", newBlock)
 }
 
 func (v *Validator) stop() {
@@ -113,7 +118,7 @@ func (v *Validator) receiveBlock(b block) {
 	}
 
 	// pre-commit
-	v.preCommit()
+	v.preCommit(b)
 
 	// commit
 	v.commit(b)
@@ -121,12 +126,21 @@ func (v *Validator) receiveBlock(b block) {
 	util.Log("#", v.id, "Block received and committed. Blockheight =", b.height)
 }
 
-func (v *Validator) preCommit() {
-	// generate random signature
+func (v *Validator) preCommit(b block) {
+	// Generate random signature
 	sig := v.getRandom()
 
-	// send piece to others
+	// Send piece to others
 	v.peer.sendSignature(sig)
+
+	// Receive signatues
+	signatures := signature{
+		signatures: make([]int, len(v.addressbook)),
+	}
+	for index := range signatures.signatures {
+		signatures.signatures[index] = v.peer.readSignature()
+	}
+	v.signatures = append(v.signatures, signatures)
 }
 
 func (v *Validator) commit(b block) {

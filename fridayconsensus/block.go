@@ -10,7 +10,7 @@ type block struct {
 	height     int
 	timestamp  int64
 	producer   int
-	signatures []int
+	signatures signature
 }
 
 func (b block) String() string {
