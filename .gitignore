@@ -10,3 +10,8 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+
+
+# Extern packages location managed by golang dep 
+vendor/

@@ -4,8 +4,10 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
 	"github.com/hdac-io/simulator/network"
-	"github.com/hdac-io/simulator/util/log"
+	"github.com/hdac-io/simulator/types"
+	log "github.com/inconshreveable/log15"
 )
 
 // Validator represents validator node
@@ -15,12 +17,13 @@ type Validator struct {
 	getRandom       func() int
 	peer            *channel
 	addressbook     []*network.Network
-	blocks        []types.Block
+	blocks          []types.Block
 	pool            *signaturepool
 	signatures      [][]types.Signature
 	finalizedHeight int
 	completedHeight int
 	height          int
+	logger          log.Logger
 }
 
 type parameter struct {
@@ -48,8 +51,9 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		parameter: parameter,
 		id:        id,
 		peer:      newChannel(),
-		blocks:        make([]types.Block, 0, 1024),
+		blocks:    make([]types.Block, 0, 1024),
 		pool:      newSignaturePool(),
+		logger:    log.New("Validator", id),
 	}
 
 	// Add dummy block
@@ -65,15 +69,24 @@ func (v *Validator) GetAddress() *network.Network {
 	return v.peer.inbound.network
 }
 
-// Start starts validator with genesis time
-func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (v *Validator) initialize(addressbook []*network.Network) bool {
 	// Prepare validator
 	v.getRandom = randomSignature(v.id, v.parameter.numValidators)
 	v.addressbook = addressbook
 	// Start channel
 	v.peer.start(addressbook)
+
+	//FIXME: more detail successful
+	return true
+}
+
+// Start starts validator with genesis time
+func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	if !v.initialize(addressbook) {
+		v.logger.Error("failed initialization.")
+	}
 
 	// Start producing loop
 	go v.produceLoop(genesisTime)
@@ -137,11 +150,11 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 
 		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
-		v.logger.Info("Block produced", newBlock,
-		 "Height", newBlock.Height,
-		 "Timestmp", time.Unix(newBlock.Timestamp),
-		 "Producer", newBlock.Producer,
-		 "ChoosenNumber", newBlock.ChoosenNumber)
+		v.logger.Info("Block produced.",
+			"Height", newBlock.Height,
+			"Producer", newBlock.Producer,
+			"ChosenNumber", newBlock.ChosenNumber,
+			"Timestmp", time.Unix(0, newBlock.Timestamp))
 
 	}
 
@@ -161,18 +174,18 @@ func (v *Validator) validateBlock(b types.Block) {
 		v.completedHeight = 0
 	}
 	v.blocks = append(v.blocks, b)
-	v.logger.Info("Block received",
-	. Blockheight", b.Height)
+	v.logger.Info("Block received.",
+		"Blockheight", b.Height)
 
 	// prepare
 	v.prepare(b)
 	v.logger.Info("Block prepared.",
-	"Blockheight", b.Height)
+		"Blockheight", b.Height)
 
 	// commit
 	v.finalize(b)
-	v.logger.Info("Block finalized",
-	"Blockheight", b.Height)
+	v.logger.Info("Block finalized.",
+		"Blockheight", b.Height)
 }
 
 func (v *Validator) prepare(b types.Block) {
@@ -183,6 +196,7 @@ func (v *Validator) prepare(b types.Block) {
 	v.peer.sendSignature(sig)
 
 	// Collect signatues
+	// TODO::FIXME timeout handling
 	v.pool.waitAndRemove(b.Height, v.parameter.numValidators)
 }
 
@@ -194,7 +208,7 @@ func (v *Validator) finalize(b types.Block) {
 	v.peer.sendSignature(sig)
 
 	// Collect signatues
-	sigs := v.pool.waitAndRemove(b.height, v.parameter.numValidators)
+	sigs := v.pool.waitAndRemove(b.Height, v.parameter.numValidators)
 	v.signatures = append(v.signatures, sigs)
 	// Finalize
 	v.finalizedHeight = b.Height
@@ -205,15 +219,15 @@ func (v *Validator) validate() bool {
 	return true
 }
 
-func (v *Validator) getRecentBlock() block {
+func (v *Validator) getRecentBlock() types.Block {
 	return v.blocks[v.height]
 }
 
-func (v *Validator) getFinalizedBlock() block {
+func (v *Validator) getFinalizedBlock() types.Block {
 	return v.blocks[v.finalizedHeight]
 }
 
-func (v *Validator) getCompletedBlock() block {
+func (v *Validator) getCompletedBlock() types.Block {
 	return v.blocks[v.completedHeight]
 }
 
