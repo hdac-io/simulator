@@ -7,13 +7,20 @@ import (
 	"time"
 )
 
+// Block time
+const blockTime time.Duration = 1 * time.Second
+
+// Number of validators
+const numValidators int = 3
+
+// Length of unconfirmed leading blocks
+const lenULB = 3
+
 func main() {
-	const blockTime time.Duration = 1 * time.Second
-	const numValidator int = 3
-	validators := make([]*fridayconsensus.Validator, numValidator)
-	addressbook := make([]*network.Network, numValidator)
+	validators := make([]*fridayconsensus.Validator, numValidators)
+	addressbook := make([]*network.Network, numValidators)
 	for id := range validators {
-		validators[id] = fridayconsensus.NewValidator(id, blockTime)
+		validators[id] = fridayconsensus.NewValidator(id, blockTime, numValidators, lenULB)
 		addressbook[id] = validators[id].GetAddress()
 	}
 

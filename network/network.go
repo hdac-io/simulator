@@ -24,7 +24,7 @@ type Network struct {
 // NewNetwork construct Network
 func NewNetwork() *Network {
 	return &Network{
-		network: make(chan load, 65535),
+		network: make(chan load, 1024),
 		// Simulated network delay is 50ms ~ 300ms
 		getDelay: randomDelay(50, 300),
 	}
