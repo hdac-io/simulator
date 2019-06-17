@@ -10,24 +10,22 @@ import (
 
 // Validator represents validator node
 type Validator struct {
-	parameter   parameter
-	id          int
-	getRandom   func() int
-	peer        *channel
-	addressbook []*network.Network
-	blocks      []block
-	signatures  []signature
+	parameter       parameter
+	id              int
+	getRandom       func() int
+	peer            *channel
+	addressbook     []*network.Network
+	blocks          []block
+	blocksCandidate []block
+	pool            signaturepool
+	// Is this necessary ??
+	signatures [][]signature
 }
 
 type parameter struct {
 	numValidators int
 	lenULB        int
 	blockTime     time.Duration
-}
-
-type signature struct {
-	blockHeight int
-	signatures  []int
 }
 
 func randomSignature(unique int, max int) func() int {
@@ -50,6 +48,7 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		id:        id,
 		peer:      newChannel(),
 		blocks:    make([]block, 0, 1024),
+		pool:      newSignaturePool(),
 	}
 }
 
@@ -71,6 +70,9 @@ func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network,
 	// Start producing loop
 	go v.produceLoop(genesisTime)
 
+	// Start validating loop
+	go v.validationLoop()
+
 	// Start receiving loop
 	v.receiveLoop()
 }
@@ -83,7 +85,7 @@ func (v *Validator) produceLoop(genesisTime time.Time) {
 	}
 }
 
-func (v *Validator) receiveLoop() {
+func (v *Validator) validationLoop() {
 	if v.parameter.lenULB == 0 {
 		for {
 			block := v.peer.readBlock()
@@ -97,6 +99,13 @@ func (v *Validator) receiveLoop() {
 	}
 }
 
+func (v *Validator) receiveLoop() {
+	for {
+		signature := v.peer.readSignature()
+		v.pool.add(signature)
+	}
+}
+
 func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	// Calculation
 	next := 0
@@ -106,7 +115,7 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 			next = v.getRandomNumberFromSignatures(v.signatures[len(v.signatures)-1])
 		} else {
 			// We can use calculated number written in block
-			next = v.getConfirmedBlock().chosenNumber
+			next = v.getFinalizedBlock().chosenNumber
 		}
 	} else {
 		// Node 0 will producing
@@ -116,7 +125,7 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 		// Not my turn
 	} else {
 		// My turn
-		signatures := signature{}
+		signatures := []signature{}
 		if len(v.signatures) >= 1 {
 			signatures = v.signatures[len(v.signatures)-1]
 		}
@@ -137,40 +146,42 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	return nextBlockTime.Add(v.parameter.blockTime)
 }
 
-func (v *Validator) stop() {
-	// Clean validator up
-}
-
 func (v *Validator) validateBlock(b block) {
 	// Validation
 	if !v.validate() {
 		return
 	}
+	util.Log("#", v.id, "Block received. Blockheight =", b.height)
 
-	// pre-commit
-	v.preCommit(b)
+	// prepare
+	v.prepare(b)
 
 	// commit
 	v.commit(b)
 
-	util.Log("#", v.id, "Block received and committed. Blockheight =", b.height)
+	util.Log("#", v.id, "Block committed. Blockheight =", b.height)
 }
 
-func (v *Validator) preCommit(b block) {
+func (v *Validator) prepare(b block) {
+	v.blocksCandidate = append(v.blocksCandidate, b)
+
 	// Generate random signature
-	sig := v.getRandom()
+	sig := newSignature(v.id, b.height, v.getRandom())
 
 	// Send piece to others
 	v.peer.sendSignature(sig)
 
-	// Receive signatues
-	signatures := signature{
-		signatures: make([]int, v.parameter.numValidators),
+	// Collect signatues
+	// FIXME: naive implementation
+	for {
+		signatures := v.pool[b.height]
+		if len(signatures) < v.parameter.numValidators {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		break
 	}
-	for index := range signatures.signatures {
-		signatures.signatures[index] = v.peer.readSignature()
-	}
-	v.signatures = append(v.signatures, signatures)
+	v.signatures = append(v.signatures, v.pool.remove(b.height))
 }
 
 func (v *Validator) commit(b block) {
@@ -184,21 +195,27 @@ func (v *Validator) validate() bool {
 
 func (v *Validator) getRecentBlock() *block {
 	recentBlock := &block{}
-	if len(v.blocks) >= 1 {
+	if len(v.blocksCandidate) > len(v.blocks) {
+		recentBlock = &v.blocksCandidate[len(v.blocksCandidate)-1]
+	} else if len(v.blocks) >= 1 {
 		recentBlock = &v.blocks[len(v.blocks)-1]
 	}
 
 	return recentBlock
 }
 
-func (v *Validator) getConfirmedBlock() block {
+func (v *Validator) getFinalizedBlock() block {
 	return v.blocks[len(v.blocks)-(v.parameter.lenULB)]
 }
 
-func (v *Validator) getRandomNumberFromSignatures(sig signature) int {
+func (v *Validator) getRandomNumberFromSignatures(sig []signature) int {
 	sum := 0
-	for _, value := range sig.signatures {
-		sum += value
+	for _, value := range sig {
+		sum += value.number
 	}
 	return sum % (v.parameter.numValidators)
+}
+
+func (v *Validator) stop() {
+	// Clean validator up
 }
