@@ -17,7 +17,7 @@ type Validator struct {
 	addressbook     []*network.Network
 	blocks          []block
 	blocksCandidate []block
-	pool            signaturepool
+	pool            *signaturepool
 	// Is this necessary ??
 	signatures [][]signature
 }
@@ -172,15 +172,7 @@ func (v *Validator) prepare(b block) {
 	v.peer.sendSignature(sig)
 
 	// Collect signatues
-	// FIXME: naive implementation
-	for {
-		signatures := v.pool[b.height]
-		if len(signatures) < v.parameter.numValidators {
-			time.Sleep(10 * time.Millisecond)
-			continue
-		}
-		break
-	}
+	v.pool.wait(b.height, v.parameter.numValidators)
 	v.signatures = append(v.signatures, v.pool.remove(b.height))
 }
 

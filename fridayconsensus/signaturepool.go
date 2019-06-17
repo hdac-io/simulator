@@ -1,19 +1,62 @@
 package fridayconsensus
 
-type signaturepool map[int][]signature
+import "sync"
 
-func newSignaturePool() signaturepool {
-	return make(signaturepool)
+type notifiableSignature struct {
+	sync.Mutex
+	cond       *sync.Cond
+	target     int
+	signatures []signature
 }
 
-func (s signaturepool) add(sig signature) {
-	signatures := s[sig.blockHeight]
-	signatures = append(signatures, sig)
-	s[sig.blockHeight] = signatures
+type signaturepool struct {
+	sync.Mutex
+	signatures map[int]*notifiableSignature
 }
 
-func (s signaturepool) remove(blockHeight int) []signature {
-	signatures := s[blockHeight]
-	delete(s, blockHeight)
-	return signatures
+func newSignaturePool() *signaturepool {
+	return &signaturepool{
+		signatures: make(map[int]*notifiableSignature),
+	}
+}
+
+func (s *signaturepool) get(height int) *notifiableSignature {
+	s.Lock()
+	sig, exists := s.signatures[height]
+	if !exists {
+		sig = &notifiableSignature{}
+		sig.cond = sync.NewCond(sig)
+
+		s.signatures[height] = sig
+	}
+	s.Unlock()
+
+	return sig
+}
+
+func (s *signaturepool) wait(height int, number int) {
+	sig := s.get(height)
+	sig.Lock()
+	sig.target = number
+	if sig.target > 0 && sig.target != len(sig.signatures) {
+		sig.cond.Wait()
+	}
+	sig.Unlock()
+}
+
+func (s *signaturepool) add(newSig signature) {
+	sig := s.get(newSig.blockHeight)
+	sig.Lock()
+	sig.signatures = append(sig.signatures, newSig)
+	sig.Unlock()
+
+	if sig.target > 0 && sig.target == len(sig.signatures) {
+		sig.cond.Signal()
+	}
+}
+
+func (s *signaturepool) remove(height int) []signature {
+	sig := s.get(height)
+	delete(s.signatures, height)
+	return sig.signatures
 }
