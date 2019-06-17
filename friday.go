@@ -14,7 +14,7 @@ const blockTime time.Duration = 1 * time.Second
 const numValidators int = 3
 
 // Length of unconfirmed leading blocks
-const lenULB = 0
+const lenULB = 2
 
 func main() {
 	validators := make([]*fridayconsensus.Validator, numValidators)
