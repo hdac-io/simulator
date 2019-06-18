@@ -19,6 +19,7 @@ type Validator struct {
 	pool            *signaturepool
 	signatures      [][]signature
 	finalizedHeight int
+	completedHeight int
 	height          int
 }
 
@@ -53,6 +54,8 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 
 	// Add dummy block
 	v.blocks = append(v.blocks, block{})
+	// Add dummy signatures
+	v.signatures = append(v.signatures, []signature{})
 
 	return v
 }
@@ -67,7 +70,7 @@ func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network,
 	defer wg.Done()
 
 	// Prepare validator
-	v.getRandom = randomSignature(v.id, len(addressbook))
+	v.getRandom = randomSignature(v.id, v.parameter.numValidators)
 	v.addressbook = addressbook
 	// Start channel
 	v.peer.start(addressbook)
@@ -113,28 +116,23 @@ func (v *Validator) receiveLoop() {
 
 func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	// Calculation
-	next := 0
-	if v.height >= v.parameter.lenULB+1 {
-		next = v.getCompletedBlock().chosenNumber
-	} else {
-		// Node 0 will producing
-	}
+	signatures := v.signatures[v.completedHeight]
+	chosenNumber := v.getRandomNumberFromSignatures(signatures)
+
+	// next := 0 if there is no completed block
+	next := chosenNumber
 
 	if next != v.id {
 		// Not my turn
 	} else {
 		// My turn
-		signatures := []signature{}
-		if len(v.signatures) >= 1 {
-			signatures = v.signatures[len(v.signatures)-1]
-		}
 
 		// Produce new block
 		newBlock := block{
 			height:       v.height + 1,
 			timestamp:    nextBlockTime.UnixNano(),
 			producer:     v.id,
-			chosenNumber: v.getRandomNumberFromSignatures(signatures),
+			chosenNumber: chosenNumber,
 		}
 
 		// Pre-prepare / send new block
@@ -152,6 +150,12 @@ func (v *Validator) validateBlock(b block) {
 		return
 	}
 	v.height = b.height
+	if v.height > v.parameter.lenULB {
+		v.completedHeight = v.height - v.parameter.lenULB
+	} else {
+		// 0 means there is no completed block
+		v.completedHeight = 0
+	}
 	v.blocks = append(v.blocks, b)
 	util.Log("#", v.id, "Block received. Blockheight =", b.height)
 
@@ -197,8 +201,12 @@ func (v *Validator) getRecentBlock() block {
 	return v.blocks[v.height]
 }
 
+func (v *Validator) getFinalizedBlock() block {
+	return v.blocks[v.finalizedHeight]
+}
+
 func (v *Validator) getCompletedBlock() block {
-	return v.blocks[v.height-v.parameter.lenULB]
+	return v.blocks[v.completedHeight]
 }
 
 func (v *Validator) getRandomNumberFromSignatures(sig []signature) int {
