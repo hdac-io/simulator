@@ -16,10 +16,10 @@ type Validator struct {
 	peer            *channel
 	addressbook     []*network.Network
 	blocks          []block
-	blocksCandidate []block
 	pool            *signaturepool
-	// Is this necessary ??
-	signatures [][]signature
+	signatures      [][]signature
+	finalizedHeight int
+	height          int
 }
 
 type parameter struct {
@@ -43,13 +43,18 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		lenULB:        lenULB,
 		blockTime:     blockTime,
 	}
-	return &Validator{
+	v := &Validator{
 		parameter: parameter,
 		id:        id,
 		peer:      newChannel(),
 		blocks:    make([]block, 0, 1024),
 		pool:      newSignaturePool(),
 	}
+
+	// Add dummy block
+	v.blocks = append(v.blocks, block{})
+
+	return v
 }
 
 // GetAddress returns validator's inbound address
@@ -109,14 +114,8 @@ func (v *Validator) receiveLoop() {
 func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	// Calculation
 	next := 0
-	if len(v.blocks) >= v.parameter.lenULB+1 {
-		if v.parameter.lenULB == 0 {
-			// We should use recent signatures
-			next = v.getRandomNumberFromSignatures(v.signatures[len(v.signatures)-1])
-		} else {
-			// We can use calculated number written in block
-			next = v.getFinalizedBlock().chosenNumber
-		}
+	if v.height >= v.parameter.lenULB+1 {
+		next = v.getCompletedBlock().chosenNumber
 	} else {
 		// Node 0 will producing
 	}
@@ -132,14 +131,15 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 
 		// Produce new block
 		newBlock := block{
-			height:       v.getRecentBlock().height + 1,
+			height:       v.height + 1,
 			timestamp:    nextBlockTime.UnixNano(),
 			producer:     v.id,
 			chosenNumber: v.getRandomNumberFromSignatures(signatures),
 		}
 
-		// Send new block
+		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
+
 		util.Log("#", v.id, "Block produced\n", newBlock)
 	}
 
@@ -151,20 +151,20 @@ func (v *Validator) validateBlock(b block) {
 	if !v.validate() {
 		return
 	}
+	v.height = b.height
+	v.blocks = append(v.blocks, b)
 	util.Log("#", v.id, "Block received. Blockheight =", b.height)
 
 	// prepare
 	v.prepare(b)
+	util.Log("#", v.id, "Block prepared. Blockheight =", b.height)
 
 	// commit
 	v.commit(b)
-
-	util.Log("#", v.id, "Block committed. Blockheight =", b.height)
+	util.Log("#", v.id, "Block finalized. Blockheight =", b.height)
 }
 
 func (v *Validator) prepare(b block) {
-	v.blocksCandidate = append(v.blocksCandidate, b)
-
 	// Generate random signature
 	sig := newSignature(v.id, b.height, v.getRandom())
 
@@ -172,12 +172,20 @@ func (v *Validator) prepare(b block) {
 	v.peer.sendSignature(sig)
 
 	// Collect signatues
-	v.pool.wait(b.height, v.parameter.numValidators)
-	v.signatures = append(v.signatures, v.pool.remove(b.height))
+	v.pool.waitAndRemove(b.height, v.parameter.numValidators)
 }
 
 func (v *Validator) commit(b block) {
-	v.blocks = append(v.blocks, b)
+	// Generate random signature
+	sig := newSignature(v.id, b.height, v.getRandom())
+
+	// Send piece to others
+	v.peer.sendSignature(sig)
+
+	// Collect signatues
+	sigs := v.pool.waitAndRemove(b.height, v.parameter.numValidators)
+	v.signatures = append(v.signatures, sigs)
+	v.finalizedHeight = b.height
 }
 
 func (v *Validator) validate() bool {
@@ -185,19 +193,12 @@ func (v *Validator) validate() bool {
 	return true
 }
 
-func (v *Validator) getRecentBlock() *block {
-	recentBlock := &block{}
-	if len(v.blocksCandidate) > len(v.blocks) {
-		recentBlock = &v.blocksCandidate[len(v.blocksCandidate)-1]
-	} else if len(v.blocks) >= 1 {
-		recentBlock = &v.blocks[len(v.blocks)-1]
-	}
-
-	return recentBlock
+func (v *Validator) getRecentBlock() block {
+	return v.blocks[v.height]
 }
 
-func (v *Validator) getFinalizedBlock() block {
-	return v.blocks[len(v.blocks)-(v.parameter.lenULB)]
+func (v *Validator) getCompletedBlock() block {
+	return v.blocks[v.height-v.parameter.lenULB]
 }
 
 func (v *Validator) getRandomNumberFromSignatures(sig []signature) int {

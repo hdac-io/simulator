@@ -25,10 +25,12 @@ type Network struct {
 func NewNetwork() *Network {
 	return &Network{
 		network: make(chan load, 1024),
-		// Simulated network delay: 50ms ~ 300ms, for instant finalization
-		// getDelay: randomDelay(50, 300),
-		// Simulated network delay: 150ms ~ 850ms, for delayed finalization
-		getDelay: randomDelay(150, 850),
+		// Simulated network delay: 150ms ~ 250ms, for instant finalization
+		// getDelay: randomDelay(150, 250),
+		// Simulated network delay: 250ms ~ 600ms, for one block delayed finalization
+		// getDelay: randomDelay(250, 600),
+		// Simulated network delay: 350ms ~ 950ms, for two block delayed finalization
+		getDelay: randomDelay(350, 950),
 	}
 }
 
