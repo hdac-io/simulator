@@ -13,7 +13,7 @@ const blockTime time.Duration = 1 * time.Second
 // Number of validators
 const numValidators int = 3
 
-// Length of unconfirmed leading blocks
+// Length of Uncompleted Leading Blocks
 const lenULB = 2
 
 func main() {
