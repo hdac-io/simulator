@@ -164,7 +164,7 @@ func (v *Validator) validateBlock(b block) {
 	util.Log("#", v.id, "Block prepared. Blockheight =", b.height)
 
 	// commit
-	v.commit(b)
+	v.finalize(b)
 	util.Log("#", v.id, "Block finalized. Blockheight =", b.height)
 }
 
@@ -179,7 +179,7 @@ func (v *Validator) prepare(b block) {
 	v.pool.waitAndRemove(b.height, v.parameter.numValidators)
 }
 
-func (v *Validator) commit(b block) {
+func (v *Validator) finalize(b block) {
 	// Generate random signature
 	sig := newSignature(v.id, b.height, v.getRandom())
 
@@ -189,6 +189,7 @@ func (v *Validator) commit(b block) {
 	// Collect signatues
 	sigs := v.pool.waitAndRemove(b.height, v.parameter.numValidators)
 	v.signatures = append(v.signatures, sigs)
+	// Finalize
 	v.finalizedHeight = b.height
 }
 
