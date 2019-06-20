@@ -72,10 +72,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/go-stack/stack",
     "github.com/inconshreveable/log15",
-    "github.com/mattn/go-colorable",
-    "github.com/mattn/go-isatty",
     "github.com/stretchr/testify/require",
   ]
   solver-name = "gps-cdcl"

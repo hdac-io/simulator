@@ -13,14 +13,14 @@ type channel struct {
 
 type peer struct {
 	block     chan types.Block
-	signature chan types.Signature
+	signature chan signature
 	network   *network.Network
 }
 
 func newPeer(network *network.Network) peer {
 	return peer{
 		block:     make(chan types.Block, 1024),
-		signature: make(chan types.Signature, 1024),
+		signature: make(chan signature, 1024),
 		network:   network,
 	}
 }
@@ -43,7 +43,7 @@ func (c *channel) start(peers []*network.Network) {
 			switch v := load.(type) {
 			case types.Block:
 				c.inbound.block <- v
-			case types.Signature:
+			case signature:
 				c.inbound.signature <- v
 			}
 		}
@@ -67,9 +67,9 @@ func (c *channel) start(peers []*network.Network) {
 	}
 }
 
-func (c *channel) sendSignature(sig types.Signature) {
+func (c *channel) sendSignature(sign signature) {
 	for _, out := range c.outbound {
-		out.signature <- sig
+		out.signature <- sign
 	}
 }
 
@@ -79,7 +79,7 @@ func (c *channel) sendBlock(b types.Block) {
 	}
 }
 
-func (c *channel) readSignature() types.Signature {
+func (c *channel) readSignature() signature {
 	return <-c.inbound.signature
 }
 

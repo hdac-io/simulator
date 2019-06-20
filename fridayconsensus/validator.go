@@ -19,9 +19,9 @@ type Validator struct {
 	addressbook     []*network.Network
 	blocks          []types.Block
 	pool            *signaturepool
-	signatures      [][]types.Signature
+	signatures      [][]signature
 	finalizedHeight int
-	completedHeight int
+	confirmedHeight int
 	height          int
 	logger          log.Logger
 }
@@ -40,7 +40,7 @@ func randomSignature(unique int, max int) func() int {
 	}
 }
 
-// NewValidator construct Validator
+// NewValidator constructs Validator
 func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int) *Validator {
 	parameter := parameter{
 		numValidators: numValidators,
@@ -59,7 +59,7 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 	// Add dummy block
 	v.blocks = append(v.blocks, types.Block{})
 	// Add dummy signatures
-	v.signatures = append(v.signatures, []types.Signature{})
+	v.signatures = append(v.signatures, []signature{})
 
 	return v
 }
@@ -123,13 +123,13 @@ func (v *Validator) validationLoop() {
 func (v *Validator) receiveLoop() {
 	for {
 		signature := v.peer.readSignature()
-		v.pool.add(signature)
+		v.pool.add(signature.kind, signature)
 	}
 }
 
 func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	// Calculation
-	signatures := v.signatures[v.completedHeight]
+	signatures := v.signatures[v.confirmedHeight]
 	chosenNumber := v.getRandomNumberFromSignatures(signatures)
 
 	// next := 0 if there is no completed block
@@ -168,21 +168,21 @@ func (v *Validator) validateBlock(b types.Block) {
 	}
 	v.height = b.Height
 	if v.height > v.parameter.lenULB {
-		v.completedHeight = v.height - v.parameter.lenULB
+		v.confirmedHeight = v.height - v.parameter.lenULB
 	} else {
-		// 0 means there is no completed block
-		v.completedHeight = 0
+		// 0 means there is no confirmed block
+		v.confirmedHeight = 0
 	}
 	v.blocks = append(v.blocks, b)
 	v.logger.Info("Block received.",
 		"Blockheight", b.Height)
 
-	// prepare
+	// Prepare
 	v.prepare(b)
 	v.logger.Info("Block prepared.",
 		"Blockheight", b.Height)
 
-	// commit
+	// Commit / finalize
 	v.finalize(b)
 	v.logger.Info("Block finalized.",
 		"Blockheight", b.Height)
@@ -190,26 +190,26 @@ func (v *Validator) validateBlock(b types.Block) {
 
 func (v *Validator) prepare(b types.Block) {
 	// Generate random signature
-	sig := newSignature(v.id, b.Height, v.getRandom())
+	sign := newSignature(v.id, prepare, b.Height, v.getRandom())
 
 	// Send piece to others
-	v.peer.sendSignature(sig)
+	v.peer.sendSignature(sign)
 
 	// Collect signatues
 	// TODO::FIXME timeout handling
-	v.pool.waitAndRemove(b.Height, v.parameter.numValidators)
+	v.pool.waitAndRemove(prepare, b.Height, v.parameter.numValidators)
 }
 
 func (v *Validator) finalize(b types.Block) {
 	// Generate random signature
-	sig := newSignature(v.id, b.Height, v.getRandom())
+	sign := newSignature(v.id, commit, b.Height, v.getRandom())
 
 	// Send piece to others
-	v.peer.sendSignature(sig)
+	v.peer.sendSignature(sign)
 
 	// Collect signatues
-	sigs := v.pool.waitAndRemove(b.Height, v.parameter.numValidators)
-	v.signatures = append(v.signatures, sigs)
+	signs := v.pool.waitAndRemove(commit, b.Height, v.parameter.numValidators)
+	v.signatures = append(v.signatures, signs)
 	// Finalize
 	v.finalizedHeight = b.Height
 }
@@ -223,18 +223,18 @@ func (v *Validator) getRecentBlock() types.Block {
 	return v.blocks[v.height]
 }
 
-func (v *Validator) getFinalizedBlock() types.Block {
+func (v *Validator) getRecentFinalizedBlock() types.Block {
 	return v.blocks[v.finalizedHeight]
 }
 
-func (v *Validator) getCompletedBlock() types.Block {
-	return v.blocks[v.completedHeight]
+func (v *Validator) getRecentConfirmedBlock() types.Block {
+	return v.blocks[v.confirmedHeight]
 }
 
-func (v *Validator) getRandomNumberFromSignatures(sig []types.Signature) int {
+func (v *Validator) getRandomNumberFromSignatures(sig []signature) int {
 	sum := 0
 	for _, value := range sig {
-		sum += value.Number
+		sum += value.number
 	}
 	return sum % (v.parameter.numValidators)
 }
