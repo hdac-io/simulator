@@ -12,6 +12,9 @@ import (
 
 // Validator represents validator node
 type Validator struct {
+	sync.Mutex
+	cond            *sync.Cond
+	waitFinalize    bool
 	parameter       parameter
 	id              int
 	getRandom       func() int
@@ -48,13 +51,15 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		blockTime:     blockTime,
 	}
 	v := &Validator{
-		parameter: parameter,
-		id:        id,
-		peer:      newChannel(),
-		blocks:    make([]types.Block, 0, 1024),
-		pool:      newSignaturePool(),
-		logger:    log.New("Validator", id),
+		waitFinalize: false,
+		parameter:    parameter,
+		id:           id,
+		peer:         newChannel(),
+		blocks:       make([]types.Block, 0, 1024),
+		pool:         newSignaturePool(),
+		logger:       log.New("Validator", id),
 	}
+	v.cond = sync.NewCond(v)
 
 	// Add dummy block
 	v.blocks = append(v.blocks, types.Block{})
@@ -128,6 +133,15 @@ func (v *Validator) receiveLoop() {
 }
 
 func (v *Validator) produce(nextBlockTime time.Time) time.Time {
+	// Height adjustment
+	v.height++
+	if v.height > v.parameter.lenULB {
+		v.confirmedHeight = v.height - v.parameter.lenULB
+	} else {
+		// 0 means there is no confirmed block
+		v.confirmedHeight = 0
+	}
+
 	// Calculation
 	signatures := v.signatures[v.confirmedHeight]
 	chosenNumber := v.getRandomNumberFromSignatures(signatures)
@@ -142,7 +156,7 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 
 		// Produce new block
 		newBlock := types.Block{
-			Height:       v.height + 1,
+			Height:       v.height,
 			Timestamp:    nextBlockTime.UnixNano(),
 			Producer:     v.id,
 			ChosenNumber: chosenNumber,
@@ -150,11 +164,8 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 
 		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
-		v.logger.Info("Block produced.",
-			"Height", newBlock.Height,
-			"Producer", newBlock.Producer,
-			"ChosenNumber", newBlock.ChosenNumber,
-			"Timestmp", time.Unix(0, newBlock.Timestamp))
+		v.logger.Info("Block produced", "Height", newBlock.Height, "Producer", newBlock.Producer,
+			"ChosenNumber", newBlock.ChosenNumber, "Timestmp", time.Unix(0, newBlock.Timestamp))
 
 	}
 
@@ -164,28 +175,23 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 func (v *Validator) validateBlock(b types.Block) {
 	// Validation
 	if !v.validate() {
-		return
+		panic("There shoud be no byzitine nodes !")
+		//return
 	}
-	v.height = b.Height
-	if v.height > v.parameter.lenULB {
-		v.confirmedHeight = v.height - v.parameter.lenULB
-	} else {
-		// 0 means there is no confirmed block
-		v.confirmedHeight = 0
+	if v.height != b.Height || len(v.blocks) != b.Height {
+		panic("Block height is mismatch !")
 	}
+
 	v.blocks = append(v.blocks, b)
-	v.logger.Info("Block received.",
-		"Blockheight", b.Height)
+	v.logger.Info("Block received", "Blockheight", b.Height)
 
 	// Prepare
 	v.prepare(b)
-	v.logger.Info("Block prepared.",
-		"Blockheight", b.Height)
+	v.logger.Info("Block prepared", "Blockheight", b.Height)
 
 	// Commit / finalize
 	v.finalize(b)
-	v.logger.Info("Block finalized.",
-		"Blockheight", b.Height)
+	v.logger.Info("Block finalized", "Blockheight", b.Height)
 }
 
 func (v *Validator) prepare(b types.Block) {
@@ -209,9 +215,21 @@ func (v *Validator) finalize(b types.Block) {
 
 	// Collect signatues
 	signs := v.pool.waitAndRemove(commit, b.Height, v.parameter.numValidators)
-	v.signatures = append(v.signatures, signs)
+
 	// Finalize
+	v.Lock()
+	for b.Height > v.finalizedHeight+1 {
+		v.logger.Warn("Previous block is not finalized yet !!!", "Current Finalizing height", b.Height, "Previous finalized height", v.finalizedHeight)
+		v.waitFinalize = true
+		v.cond.Wait()
+	}
+	v.signatures = append(v.signatures, signs)
 	v.finalizedHeight = b.Height
+	if v.waitFinalize {
+		v.cond.Broadcast()
+		v.waitFinalize = false
+	}
+	v.Unlock()
 }
 
 func (v *Validator) validate() bool {
