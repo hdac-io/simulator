@@ -7,9 +7,3 @@ type Block struct {
 	Producer     int
 	ChosenNumber int
 }
-
-type Signature struct {
-	Id          int
-	BlockHeight int
-	Number      int
-}
