@@ -52,7 +52,7 @@ func (s *signaturepool) waitAndRemove(kind kind, height int, number int) []signa
 		panic("Must not enter here !")
 	}
 	sig.target = number
-	if sig.target > 0 && sig.target != len(sig.signatures) {
+	for sig.target > 0 && sig.target != len(sig.signatures) {
 		sig.cond.Wait()
 	}
 	s.Lock()
