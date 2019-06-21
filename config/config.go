@@ -35,6 +35,6 @@ func TestConsensusConfig() *ConsensusConfig {
 	return &ConsensusConfig{
 		BlockTime:     1 * time.Second,
 		NumValidators: 3,
-		LenULB:        3,
+		LenULB:        2,
 	}
 }
