@@ -1,4 +1,4 @@
-package fridayconsensus
+package node
 
 import (
 	"bytes"
@@ -8,14 +8,15 @@ import (
 	"time"
 
 	"github.com/hdac-io/simulator/block"
+	"github.com/hdac-io/simulator/consensus"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/persistent"
 	"github.com/hdac-io/simulator/signature"
 	log "github.com/inconshreveable/log15"
 )
 
-// Validator represents validator node
-type Validator struct {
+// Node represents validator node
+type Node struct {
 	// For synchronization
 	sync.Mutex
 	cond         *sync.Cond
@@ -26,6 +27,7 @@ type Validator struct {
 
 	// Validator data
 	id              int
+	validator       bool
 	finalizedHeight int
 	confirmedHeight int
 	height          int
@@ -48,6 +50,7 @@ type Validator struct {
 }
 
 type parameter struct {
+	consensus     consensus.Consensus
 	numValidators int
 	lenULB        int
 	blockTime     time.Duration
@@ -61,22 +64,30 @@ func randomSignature(unique int, max int) func() int {
 	}
 }
 
-// NewValidator constructs Validator
-func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int) *Validator {
-	parameter := parameter{
+// New constructs node
+func New(id int) *Node {
+	v := &Node{
+		id:         id,
+		peer:       newChannel(),
+		blocks:     make([]block.Block, 0),
+		persistent: persistent.New(),
+		pool:       newSignaturePool(),
+		logger:     log.New("Validator", id),
+	}
+	v.cond = sync.NewCond(v)
+
+	return v
+}
+
+// NewValidator constructs validator node
+func NewValidator(consensus consensus.Consensus, id int, blockTime time.Duration, numValidators int, lenULB int) *Node {
+	v := New(id)
+	v.validator = true
+	v.parameter = parameter{
+		consensus:     consensus,
 		numValidators: numValidators,
 		lenULB:        lenULB,
 		blockTime:     blockTime,
-	}
-	v := &Validator{
-		waitFinalize: false,
-		parameter:    parameter,
-		id:           id,
-		peer:         newChannel(),
-		blocks:       make([]block.Block, 0),
-		persistent:   persistent.New(),
-		pool:         newSignaturePool(),
-		logger:       log.New("Validator", id),
 	}
 	v.cond = sync.NewCond(v)
 
@@ -84,11 +95,11 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 }
 
 // GetAddress returns validator's inbound address
-func (v *Validator) GetAddress() *network.Network {
+func (v *Node) GetAddress() *network.Network {
 	return v.peer.inbound.network
 }
 
-func (v *Validator) initialize(addressbook []*network.Network) bool {
+func (v *Node) initialize(addressbook []*network.Network) bool {
 	// Prepare validator
 	v.getRandom = randomSignature(v.id, v.parameter.numValidators)
 	v.addressbook = addressbook
@@ -100,24 +111,29 @@ func (v *Validator) initialize(addressbook []*network.Network) bool {
 }
 
 // Start starts validator with genesis time
-func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network, wg *sync.WaitGroup) {
+func (v *Node) Start(genesisTime time.Time, addressbook []*network.Network, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	if !v.initialize(addressbook) {
 		panic("Initialization failed !")
 	}
 
-	// Start producing loop
-	go v.produceLoop(genesisTime)
+	// Wait for genesis
+	time.Sleep(genesisTime.Sub(time.Now()))
 
-	// Start validating loop
-	go v.validationLoop()
+	if v.validator {
+		// Start producing loop
+		go v.produceLoop(genesisTime)
+
+		// Start validating loop
+		go v.validationLoop()
+	}
 
 	// Start receiving loop
 	v.receiveLoop()
 }
 
-func (v *Validator) produceLoop(genesisTime time.Time) {
+func (v *Node) produceLoop(genesisTime time.Time) {
 	nextBlockTime := genesisTime
 	for {
 		time.Sleep(nextBlockTime.Sub(time.Now()))
@@ -125,7 +141,7 @@ func (v *Validator) produceLoop(genesisTime time.Time) {
 	}
 }
 
-func (v *Validator) validationLoop() {
+func (v *Node) validationLoop() {
 	if v.parameter.lenULB == 0 {
 		for {
 			block := v.peer.readBlock()
@@ -139,14 +155,14 @@ func (v *Validator) validationLoop() {
 	}
 }
 
-func (v *Validator) receiveLoop() {
+func (v *Node) receiveLoop() {
 	for {
 		signature := v.peer.readSignature()
 		v.pool.add(signature.Kind, signature)
 	}
 }
 
-func (v *Validator) produce(nextBlockTime time.Time) time.Time {
+func (v *Node) produce(nextBlockTime time.Time) time.Time {
 	// Height adjustment
 	v.height++
 	// Negative number and 0 mean there is no confirmed block
@@ -177,7 +193,7 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	return nextBlockTime.Add(v.parameter.blockTime)
 }
 
-func (v *Validator) validateBlock(b block.Block) {
+func (v *Node) validateBlock(b block.Block) {
 	// Validation
 	if !v.validate(b) {
 		panic("There shoud be no byzitine nodes !")
@@ -202,7 +218,7 @@ func (v *Validator) validateBlock(b block.Block) {
 }
 
 // FIXME: We assume that there is no byzantine nodes
-func (v *Validator) validate(b block.Block) bool {
+func (v *Node) validate(b block.Block) bool {
 	// Validate producer
 	if v.next != b.Producer {
 		return false
@@ -216,7 +232,7 @@ func (v *Validator) validate(b block.Block) bool {
 	return true
 }
 
-func (v *Validator) prepare(b block.Block) {
+func (v *Node) prepare(b block.Block) {
 	// Generate dummy signature with -1
 	sign := signature.New(v.id, signature.Prepare, b.Height, -1)
 
@@ -227,7 +243,7 @@ func (v *Validator) prepare(b block.Block) {
 	v.pool.waitAndRemove(signature.Prepare, b.Height, v.parameter.numValidators)
 }
 
-func (v *Validator) finalize(b block.Block) {
+func (v *Node) finalize(b block.Block) {
 	// Generate random signature
 	sign := signature.New(v.id, signature.Commit, b.Height, v.getRandom())
 
@@ -260,7 +276,7 @@ func (v *Validator) finalize(b block.Block) {
 	v.Unlock()
 }
 
-func (v *Validator) getCurrentBlock() block.Block {
+func (v *Node) getCurrentBlock() block.Block {
 	b := v.getRecentBlock()
 	if b.Height != v.height {
 		return block.Block{Height: -1}
@@ -269,23 +285,23 @@ func (v *Validator) getCurrentBlock() block.Block {
 	return b
 }
 
-func (v *Validator) getRecentBlock() block.Block {
+func (v *Node) getRecentBlock() block.Block {
 	return v.blocks[len(v.blocks)-1]
 }
 
-func (v *Validator) getRecentFinalizedBlock() block.Block {
+func (v *Node) getRecentFinalizedBlock() block.Block {
 	return v.persistent.GetBlock(v.finalizedHeight)
 }
 
-func (v *Validator) getRecentConfirmedBlock() block.Block {
+func (v *Node) getRecentConfirmedBlock() block.Block {
 	return v.persistent.GetBlock(v.confirmedHeight)
 }
 
-func (v *Validator) getRecentConfirmedSignature() []signature.Signature {
+func (v *Node) getRecentConfirmedSignature() []signature.Signature {
 	return v.persistent.GetSignature(v.confirmedHeight)
 }
 
-func (v *Validator) getRandomNumberFromSignatures(signs []signature.Signature) int {
+func (v *Node) getRandomNumberFromSignatures(signs []signature.Signature) int {
 	sum := 0
 	for _, sign := range signs {
 		if sign.Number < 0 {
@@ -296,6 +312,6 @@ func (v *Validator) getRandomNumberFromSignatures(signs []signature.Signature) i
 	return sum % (v.parameter.numValidators)
 }
 
-func (v *Validator) stop() {
+func (v *Node) stop() {
 	// Clean validator up
 }

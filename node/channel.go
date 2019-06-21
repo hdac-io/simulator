@@ -1,4 +1,4 @@
-package fridayconsensus
+package node
 
 import (
 	"github.com/hdac-io/simulator/block"
