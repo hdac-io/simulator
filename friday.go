@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	simulcfg "github.com/hdac-io/simulator/config"
+	config "github.com/hdac-io/simulator/config"
 	"github.com/hdac-io/simulator/fridayconsensus"
 	"github.com/hdac-io/simulator/network"
 	log "github.com/inconshreveable/log15"
@@ -14,11 +14,11 @@ func main() {
 	logger := log.New("module", "main")
 	logger.Info("Initialize Validators and AddressBooks")
 
-	cfg := simulcfg.TestConfig()
-	validators := make([]*fridayconsensus.Validator, cfg.Consensus.NumValidators)
-	addressbook := make([]*network.Network, cfg.Consensus.NumValidators)
+	config := config.TestConfig()
+	validators := make([]*fridayconsensus.Validator, config.Consensus.NumValidators)
+	addressbook := make([]*network.Network, config.Consensus.NumValidators)
 	for id := range validators {
-		validators[id] = fridayconsensus.NewValidator(id, cfg.Consensus.BlockTime, cfg.Consensus.NumValidators, cfg.Consensus.LenULB)
+		validators[id] = fridayconsensus.NewValidator(id, config.Consensus.BlockTime, config.Consensus.NumValidators, config.Consensus.LenULB)
 		addressbook[id] = validators[id].GetAddress()
 	}
 

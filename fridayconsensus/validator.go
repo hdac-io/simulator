@@ -1,6 +1,7 @@
 package fridayconsensus
 
 import (
+	"encoding/hex"
 	"math/rand"
 	"sync"
 	"time"
@@ -162,17 +163,12 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 		// My turn
 
 		// Produce new block
-		newBlock := types.Block{
-			Height:       v.height,
-			Timestamp:    nextBlockTime.UnixNano(),
-			Producer:     v.id,
-			ChosenNumber: chosenNumber,
-		}
+		newBlock := types.NewBlock(v.height, nextBlockTime.UnixNano(), v.id, chosenNumber)
 
 		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
 		v.logger.Info("Block produced", "Height", newBlock.Height, "Producer", newBlock.Producer,
-			"ChosenNumber", newBlock.ChosenNumber, "Timestmp", time.Unix(0, newBlock.Timestamp))
+			"ChosenNumber", newBlock.ChosenNumber, "Timestmp", time.Unix(0, newBlock.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash))
 
 	}
 
@@ -186,13 +182,13 @@ func (v *Validator) validateBlock(b types.Block) {
 		//return
 	}
 
+	v.logger.Info("Block received", "Blockheight", b.Height)
 	v.Lock()
 	if v.height != b.Height {
 		panic("Block height is mismatch !")
 	}
 	v.blocks = append(v.blocks, b)
 	v.Unlock()
-	v.logger.Info("Block received", "Blockheight", b.Height)
 
 	// Prepare
 	v.prepare(b)
