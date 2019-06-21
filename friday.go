@@ -14,7 +14,7 @@ func main() {
 	logger := log.New("module", "main")
 	logger.Info("Initialize Validators and AddressBooks")
 
-	config := config.TestConfig()
+	config := config.GetDefault()
 	validators := make([]*fridayconsensus.Validator, config.Consensus.NumValidators)
 	addressbook := make([]*network.Network, config.Consensus.NumValidators)
 	for id := range validators {
