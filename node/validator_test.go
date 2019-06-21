@@ -1,4 +1,4 @@
-package fridayconsensus
+package node
 
 import (
 	"os"
@@ -20,14 +20,14 @@ func TestMain(m *testing.M) {
 func TestNewValidator(t *testing.T) {
 	inputValidatorID := 0
 	inputBlockTime := cfg.Consensus.BlockTime
-	validator := NewValidator(inputValidatorID, inputBlockTime, 1, cfg.Consensus.LenULB)
+	validator := New(cfg.Consensus.Consensus, inputValidatorID, inputBlockTime, 1, cfg.Consensus.LenULB)
 
 	require.Equal(t, inputValidatorID, validator.id)
 	require.Equal(t, 0, len(validator.addressbook))
 }
 
 func TestValidatorInitialization(t *testing.T) {
-	validator := NewValidator(0, cfg.Consensus.BlockTime, 1, cfg.Consensus.LenULB)
+	validator := New(cfg.Consensus.Consensus, 0, cfg.Consensus.BlockTime, 1, cfg.Consensus.LenULB)
 	require.True(t, validator.initialize([]*network.Network{validator.GetAddress()}))
 
 	require.Equal(t, 1, len(validator.addressbook))
