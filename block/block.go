@@ -1,4 +1,4 @@
-package types
+package block
 
 import (
 	"crypto/sha256"
@@ -7,27 +7,26 @@ import (
 
 // Block represents simple block structure
 type Block struct {
-	Hash         []byte
-	Height       int
-	Timestamp    int64
-	Producer     int
-	ChosenNumber int
+	Hash      []byte
+	Height    int
+	Timestamp int64
+	Producer  int
 }
 
-// NewBlock constructs block
-func NewBlock(height int, timestamp int64, producer int, chosenNumber int) Block {
+// New constructs block
+func New(height int, timestamp int64, producer int) Block {
 	b := Block{
-		Height:       height,
-		Timestamp:    timestamp,
-		Producer:     producer,
-		ChosenNumber: chosenNumber,
+		Height:    height,
+		Timestamp: timestamp,
+		Producer:  producer,
 	}
-	b.Hash = hashFromBlock(b)
+	b.Hash = CalculateHashFromBlock(b)
 
 	return b
 }
 
-func hashFromBlock(b Block) []byte {
+// CalculateHashFromBlock returns calculated hash using block contents
+func CalculateHashFromBlock(b Block) []byte {
 	hash := sha256.New()
 	buffer := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buffer, uint64(b.Height))
@@ -37,9 +36,6 @@ func hashFromBlock(b Block) []byte {
 	hash.Write(buffer)
 	buffer = make([]byte, 8)
 	binary.LittleEndian.PutUint64(buffer, uint64(b.Producer))
-	hash.Write(buffer)
-	buffer = make([]byte, 8)
-	binary.LittleEndian.PutUint64(buffer, uint64(b.ChosenNumber))
 	hash.Write(buffer)
 
 	return hash.Sum(nil)

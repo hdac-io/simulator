@@ -1,15 +1,16 @@
 package fridayconsensus
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/persistent"
 	"github.com/hdac-io/simulator/signature"
-	"github.com/hdac-io/simulator/types"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -28,8 +29,9 @@ type Validator struct {
 	finalizedHeight int
 	confirmedHeight int
 	height          int
+	next            int
 	getRandom       func() int
-	blocks          []types.Block
+	blocks          []block.Block
 
 	// Network data
 	peer        *channel
@@ -71,8 +73,8 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		parameter:    parameter,
 		id:           id,
 		peer:         newChannel(),
-		blocks:       make([]types.Block, 0),
-		persistent:   persistent.NewPersistent(),
+		blocks:       make([]block.Block, 0),
+		persistent:   persistent.New(),
 		pool:         newSignaturePool(),
 		logger:       log.New("Validator", id),
 	}
@@ -155,29 +157,29 @@ func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	chosenNumber := v.getRandomNumberFromSignatures(signatures)
 
 	// next := 0 if there is no completed block
-	next := chosenNumber
+	v.next = chosenNumber
 
-	if next != v.id {
+	if v.next != v.id {
 		// Not my turn
 	} else {
 		// My turn
 
 		// Produce new block
-		newBlock := types.NewBlock(v.height, nextBlockTime.UnixNano(), v.id, chosenNumber)
+		newBlock := block.New(v.height, nextBlockTime.UnixNano(), v.id)
 
 		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
 		v.logger.Info("Block produced", "Height", newBlock.Height, "Producer", newBlock.Producer,
-			"ChosenNumber", newBlock.ChosenNumber, "Timestmp", time.Unix(0, newBlock.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash))
+			"Timestmp", time.Unix(0, newBlock.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash))
 
 	}
 
 	return nextBlockTime.Add(v.parameter.blockTime)
 }
 
-func (v *Validator) validateBlock(b types.Block) {
+func (v *Validator) validateBlock(b block.Block) {
 	// Validation
-	if !v.validate() {
+	if !v.validate(b) {
 		panic("There shoud be no byzitine nodes !")
 		//return
 	}
@@ -199,9 +201,24 @@ func (v *Validator) validateBlock(b types.Block) {
 	v.logger.Info("Block finalized", "Blockheight", b.Height)
 }
 
-func (v *Validator) prepare(b types.Block) {
+// FIXME: We assume that there is no byzantine nodes
+func (v *Validator) validate(b block.Block) bool {
+	// Validate producer
+	if v.next != b.Producer {
+		return false
+	}
+
+	// Validate block hash
+	if !bytes.Equal(b.Hash, block.CalculateHashFromBlock(b)) {
+		return false
+	}
+
+	return true
+}
+
+func (v *Validator) prepare(b block.Block) {
 	// Generate dummy signature with -1
-	sign := signature.NewSignature(v.id, signature.Prepare, b.Height, -1)
+	sign := signature.New(v.id, signature.Prepare, b.Height, -1)
 
 	// Send piece to others
 	v.peer.sendSignature(sign)
@@ -210,9 +227,9 @@ func (v *Validator) prepare(b types.Block) {
 	v.pool.waitAndRemove(signature.Prepare, b.Height, v.parameter.numValidators)
 }
 
-func (v *Validator) finalize(b types.Block) {
+func (v *Validator) finalize(b block.Block) {
 	// Generate random signature
-	sign := signature.NewSignature(v.id, signature.Commit, b.Height, v.getRandom())
+	sign := signature.New(v.id, signature.Commit, b.Height, v.getRandom())
 
 	// Send piece to others
 	v.peer.sendSignature(sign)
@@ -243,29 +260,24 @@ func (v *Validator) finalize(b types.Block) {
 	v.Unlock()
 }
 
-func (v *Validator) validate() bool {
-	// FIXME: We assume that there is no byzantine nodes
-	return true
-}
-
-func (v *Validator) getCurrentBlock() types.Block {
+func (v *Validator) getCurrentBlock() block.Block {
 	b := v.getRecentBlock()
 	if b.Height != v.height {
-		return types.Block{Height: -1}
+		return block.Block{Height: -1}
 	}
 
 	return b
 }
 
-func (v *Validator) getRecentBlock() types.Block {
+func (v *Validator) getRecentBlock() block.Block {
 	return v.blocks[len(v.blocks)-1]
 }
 
-func (v *Validator) getRecentFinalizedBlock() types.Block {
+func (v *Validator) getRecentFinalizedBlock() block.Block {
 	return v.persistent.GetBlock(v.finalizedHeight)
 }
 
-func (v *Validator) getRecentConfirmedBlock() types.Block {
+func (v *Validator) getRecentConfirmedBlock() block.Block {
 	return v.persistent.GetBlock(v.confirmedHeight)
 }
 

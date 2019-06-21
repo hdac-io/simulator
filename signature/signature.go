@@ -20,8 +20,8 @@ type Signature struct {
 	Number      int
 }
 
-// NewSignature returns signature type
-func NewSignature(id int, kind Kind, height int, number int) Signature {
+// New returns signature type
+func New(id int, kind Kind, height int, number int) Signature {
 	return Signature{
 		ID:          id,
 		Kind:        kind,
