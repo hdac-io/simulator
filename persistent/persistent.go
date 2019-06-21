@@ -1,26 +1,26 @@
 package persistent
 
 import (
+	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/signature"
-	"github.com/hdac-io/simulator/types"
 )
 
 // Persistent represents persistent media
 type Persistent struct {
-	blocks     []types.Block
+	blocks     []block.Block
 	signatures [][]signature.Signature
 }
 
-// NewPersistent return inittial Persistent type
-func NewPersistent() Persistent {
+// New return inittial Persistent type
+func New() Persistent {
 	return Persistent{
-		blocks:     make([]types.Block, 0),
+		blocks:     make([]block.Block, 0),
 		signatures: make([][]signature.Signature, 0),
 	}
 }
 
 // AddBlock stores block
-func (p *Persistent) AddBlock(block types.Block) {
+func (p *Persistent) AddBlock(block block.Block) {
 	if len(p.blocks) != block.Height-1 {
 		panic("Wrong block height !")
 	}
@@ -28,7 +28,7 @@ func (p *Persistent) AddBlock(block types.Block) {
 }
 
 // GetBlock retrieves block
-func (p *Persistent) GetBlock(height int) types.Block {
+func (p *Persistent) GetBlock(height int) block.Block {
 	return p.blocks[height-1]
 }
 

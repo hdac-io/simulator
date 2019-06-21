@@ -1,9 +1,9 @@
 package fridayconsensus
 
 import (
+	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/signature"
-	"github.com/hdac-io/simulator/types"
 )
 
 // channel represents inbound and outbound channel
@@ -13,14 +13,14 @@ type channel struct {
 }
 
 type peer struct {
-	block     chan types.Block
+	block     chan block.Block
 	signature chan signature.Signature
 	network   *network.Network
 }
 
 func newPeer(network *network.Network) peer {
 	return peer{
-		block:     make(chan types.Block, 1024),
+		block:     make(chan block.Block, 1024),
 		signature: make(chan signature.Signature, 1024),
 		network:   network,
 	}
@@ -42,7 +42,7 @@ func (c *channel) start(peers []*network.Network) {
 		for {
 			load := c.inbound.network.Read()
 			switch v := load.(type) {
-			case types.Block:
+			case block.Block:
 				c.inbound.block <- v
 			case signature.Signature:
 				c.inbound.signature <- v
@@ -74,7 +74,7 @@ func (c *channel) sendSignature(sign signature.Signature) {
 	}
 }
 
-func (c *channel) sendBlock(b types.Block) {
+func (c *channel) sendBlock(b block.Block) {
 	for _, out := range c.outbound {
 		out.block <- b
 	}
@@ -84,6 +84,6 @@ func (c *channel) readSignature() signature.Signature {
 	return <-c.inbound.signature
 }
 
-func (c *channel) readBlock() types.Block {
+func (c *channel) readBlock() block.Block {
 	return <-c.inbound.block
 }
