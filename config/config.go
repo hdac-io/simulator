@@ -4,37 +4,26 @@ import (
 	"time"
 )
 
+// Config contains various configuration
 type Config struct {
-	Consensus *ConsensusConfig
+	Consensus *consensusConfig
 }
 
-func DefaultConfig() *Config {
-	return &Config{
-		Consensus: DefaultConsensusConfig(),
-	}
-}
-
-func TestConfig() *Config {
-	return &Config{
-		Consensus: TestConsensusConfig(),
-	}
-}
-
-type ConsensusConfig struct {
+type consensusConfig struct {
 	BlockTime     time.Duration // Block time
 	NumValidators int           // Number of validators
 	LenULB        int           // Length of unconfirmed leading blocks
 }
 
-func DefaultConsensusConfig() *ConsensusConfig {
-	return &ConsensusConfig{
-		BlockTime: 1 * time.Second,
-	}
-}
-func TestConsensusConfig() *ConsensusConfig {
-	return &ConsensusConfig{
+// GetDefault retrieves default configuration
+func GetDefault() *Config {
+	c := consensusConfig{
 		BlockTime:     1 * time.Second,
 		NumValidators: 3,
 		LenULB:        2,
+	}
+
+	return &Config{
+		Consensus: &c,
 	}
 }

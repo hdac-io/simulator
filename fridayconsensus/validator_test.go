@@ -13,7 +13,7 @@ var cfg *simulcfg.Config
 
 func TestMain(m *testing.M) {
 	// call flag.Parse() here if TestMain uses flags
-	cfg = simulcfg.TestConfig()
+	cfg = simulcfg.GetDefault()
 	os.Exit(m.Run())
 }
 
