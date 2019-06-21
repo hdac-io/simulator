@@ -6,27 +6,42 @@ import (
 	"time"
 
 	"github.com/hdac-io/simulator/network"
+	"github.com/hdac-io/simulator/persistent"
+	"github.com/hdac-io/simulator/signature"
 	"github.com/hdac-io/simulator/types"
 	log "github.com/inconshreveable/log15"
 )
 
 // Validator represents validator node
 type Validator struct {
+	// For synchronization
 	sync.Mutex
-	cond            *sync.Cond
-	waitFinalize    bool
-	parameter       parameter
+	cond         *sync.Cond
+	waitFinalize bool
+
+	// Chain parameters
+	parameter parameter
+
+	// Validator data
 	id              int
-	getRandom       func() int
-	peer            *channel
-	addressbook     []*network.Network
-	blocks          []types.Block
-	pool            *signaturepool
-	signatures      [][]signature
 	finalizedHeight int
 	confirmedHeight int
 	height          int
-	logger          log.Logger
+	getRandom       func() int
+	blocks          []types.Block
+
+	// Network data
+	peer        *channel
+	addressbook []*network.Network
+
+	// Transaction pool
+	pool *signaturepool
+
+	// Persistent
+	persistent persistent.Persistent
+
+	// Logger
+	logger log.Logger
 }
 
 type parameter struct {
@@ -55,16 +70,12 @@ func NewValidator(id int, blockTime time.Duration, numValidators int, lenULB int
 		parameter:    parameter,
 		id:           id,
 		peer:         newChannel(),
-		blocks:       make([]types.Block, 0, 1024),
+		blocks:       make([]types.Block, 0),
+		persistent:   persistent.NewPersistent(),
 		pool:         newSignaturePool(),
 		logger:       log.New("Validator", id),
 	}
 	v.cond = sync.NewCond(v)
-
-	// Add dummy block
-	v.blocks = append(v.blocks, types.Block{})
-	// Add dummy signatures
-	v.signatures = append(v.signatures, []signature{})
 
 	return v
 }
@@ -90,7 +101,7 @@ func (v *Validator) Start(genesisTime time.Time, addressbook []*network.Network,
 	defer wg.Done()
 
 	if !v.initialize(addressbook) {
-		v.logger.Error("failed initialization.")
+		panic("Initialization failed !")
 	}
 
 	// Start producing loop
@@ -128,22 +139,18 @@ func (v *Validator) validationLoop() {
 func (v *Validator) receiveLoop() {
 	for {
 		signature := v.peer.readSignature()
-		v.pool.add(signature.kind, signature)
+		v.pool.add(signature.Kind, signature)
 	}
 }
 
 func (v *Validator) produce(nextBlockTime time.Time) time.Time {
 	// Height adjustment
 	v.height++
-	if v.height > v.parameter.lenULB {
-		v.confirmedHeight = v.height - v.parameter.lenULB
-	} else {
-		// 0 means there is no confirmed block
-		v.confirmedHeight = 0
-	}
+	// Negative number and 0 mean there is no confirmed block
+	v.confirmedHeight = v.height - (v.parameter.lenULB + 1)
 
 	// Calculation
-	signatures := v.signatures[v.confirmedHeight]
+	signatures := v.getRecentConfirmedSignature()
 	chosenNumber := v.getRandomNumberFromSignatures(signatures)
 
 	// next := 0 if there is no completed block
@@ -178,11 +185,13 @@ func (v *Validator) validateBlock(b types.Block) {
 		panic("There shoud be no byzitine nodes !")
 		//return
 	}
-	if v.height != b.Height || len(v.blocks) != b.Height {
+
+	v.Lock()
+	if v.height != b.Height {
 		panic("Block height is mismatch !")
 	}
-
 	v.blocks = append(v.blocks, b)
+	v.Unlock()
 	v.logger.Info("Block received", "Blockheight", b.Height)
 
 	// Prepare
@@ -195,40 +204,46 @@ func (v *Validator) validateBlock(b types.Block) {
 }
 
 func (v *Validator) prepare(b types.Block) {
-	// Generate random signature
-	sign := newSignature(v.id, prepare, b.Height, v.getRandom())
+	// Generate dummy signature with -1
+	sign := signature.NewSignature(v.id, signature.Prepare, b.Height, -1)
 
 	// Send piece to others
 	v.peer.sendSignature(sign)
 
 	// Collect signatues
-	// TODO::FIXME timeout handling
-	v.pool.waitAndRemove(prepare, b.Height, v.parameter.numValidators)
+	v.pool.waitAndRemove(signature.Prepare, b.Height, v.parameter.numValidators)
 }
 
 func (v *Validator) finalize(b types.Block) {
 	// Generate random signature
-	sign := newSignature(v.id, commit, b.Height, v.getRandom())
+	sign := signature.NewSignature(v.id, signature.Commit, b.Height, v.getRandom())
 
 	// Send piece to others
 	v.peer.sendSignature(sign)
 
 	// Collect signatues
-	signs := v.pool.waitAndRemove(commit, b.Height, v.parameter.numValidators)
+	signs := v.pool.waitAndRemove(signature.Commit, b.Height, v.parameter.numValidators)
 
 	// Finalize
 	v.Lock()
+
 	for b.Height > v.finalizedHeight+1 {
-		v.logger.Warn("Previous block is not finalized yet !!!", "Current Finalizing height", b.Height, "Previous finalized height", v.finalizedHeight)
+		v.logger.Warn("Previous block is not finalized yet !", "Current Finalizing height", b.Height, "Previous finalized height", v.finalizedHeight)
 		v.waitFinalize = true
 		v.cond.Wait()
 	}
-	v.signatures = append(v.signatures, signs)
 	v.finalizedHeight = b.Height
 	if v.waitFinalize {
 		v.cond.Broadcast()
 		v.waitFinalize = false
 	}
+
+	// Store finalized block
+	v.persistent.AddBlock(b)
+	v.blocks = v.blocks[1:]
+	// Store finalized signature
+	v.persistent.AddSignature(signs)
+
 	v.Unlock()
 }
 
@@ -237,22 +252,38 @@ func (v *Validator) validate() bool {
 	return true
 }
 
+func (v *Validator) getCurrentBlock() types.Block {
+	b := v.getRecentBlock()
+	if b.Height != v.height {
+		return types.Block{Height: -1}
+	}
+
+	return b
+}
+
 func (v *Validator) getRecentBlock() types.Block {
-	return v.blocks[v.height]
+	return v.blocks[len(v.blocks)-1]
 }
 
 func (v *Validator) getRecentFinalizedBlock() types.Block {
-	return v.blocks[v.finalizedHeight]
+	return v.persistent.GetBlock(v.finalizedHeight)
 }
 
 func (v *Validator) getRecentConfirmedBlock() types.Block {
-	return v.blocks[v.confirmedHeight]
+	return v.persistent.GetBlock(v.confirmedHeight)
 }
 
-func (v *Validator) getRandomNumberFromSignatures(sig []signature) int {
+func (v *Validator) getRecentConfirmedSignature() []signature.Signature {
+	return v.persistent.GetSignature(v.confirmedHeight)
+}
+
+func (v *Validator) getRandomNumberFromSignatures(signs []signature.Signature) int {
 	sum := 0
-	for _, value := range sig {
-		sum += value.number
+	for _, sign := range signs {
+		if sign.Number < 0 {
+			panic("Bad signature !")
+		}
+		sum += sign.Number
 	}
 	return sum % (v.parameter.numValidators)
 }

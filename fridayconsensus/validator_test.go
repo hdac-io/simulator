@@ -23,7 +23,6 @@ func TestNewValidator(t *testing.T) {
 	validator := NewValidator(inputValidatorID, inputBlockTime, 1, cfg.Consensus.LenULB)
 
 	require.Equal(t, inputValidatorID, validator.id)
-	require.Equal(t, 1, len(validator.blocks)) //has Dummy Block?
 	require.Equal(t, 0, len(validator.addressbook))
 }
 
@@ -32,7 +31,6 @@ func TestValidatorInitialization(t *testing.T) {
 	require.True(t, validator.initialize([]*network.Network{validator.GetAddress()}))
 
 	require.Equal(t, 1, len(validator.addressbook))
-	require.Equal(t, 1, len(validator.signatures)) //has Dummy Signature?
 	require.Equal(t, 1, len(validator.peer.outbound))
 }
 

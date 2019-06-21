@@ -2,29 +2,31 @@ package fridayconsensus
 
 import (
 	"sync"
+
+	"github.com/hdac-io/simulator/signature"
 )
 
 type notifiableSignature struct {
 	sync.Mutex
 	cond       *sync.Cond
 	target     int
-	signatures []signature
+	signatures []signature.Signature
 }
 
 type signatureMap map[int]*notifiableSignature
 
 type signaturepool struct {
 	sync.RWMutex
-	signatures [numKind]signatureMap
+	signatures [signature.NumKind]signatureMap
 }
 
 func newSignaturePool() *signaturepool {
 	return &signaturepool{
-		signatures: [numKind]signatureMap{make(signatureMap), make(signatureMap)},
+		signatures: [signature.NumKind]signatureMap{make(signatureMap), make(signatureMap)},
 	}
 }
 
-func (s *signaturepool) get(kind kind, height int) *notifiableSignature {
+func (s *signaturepool) get(kind signature.Kind, height int) *notifiableSignature {
 	s.RLock()
 	sig, exists := s.signatures[kind][height]
 	s.RUnlock()
@@ -45,7 +47,7 @@ func (s *signaturepool) get(kind kind, height int) *notifiableSignature {
 	return sig
 }
 
-func (s *signaturepool) waitAndRemove(kind kind, height int, number int) []signature {
+func (s *signaturepool) waitAndRemove(kind signature.Kind, height int, number int) []signature.Signature {
 	sig := s.get(kind, height)
 	sig.Lock()
 	if sig.target != -1 {
@@ -63,8 +65,8 @@ func (s *signaturepool) waitAndRemove(kind kind, height int, number int) []signa
 	return sig.signatures
 }
 
-func (s *signaturepool) add(kind kind, newSign signature) {
-	sign := s.get(kind, newSign.blockHeight)
+func (s *signaturepool) add(kind signature.Kind, newSign signature.Signature) {
+	sign := s.get(kind, newSign.BlockHeight)
 	sign.Lock()
 	sign.signatures = append(sign.signatures, newSign)
 
