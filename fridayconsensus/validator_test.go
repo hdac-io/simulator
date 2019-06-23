@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/keytransparency/core/crypto/vrf/p256"
 	simulcfg "github.com/hdac-io/simulator/config"
 	"github.com/hdac-io/simulator/network"
 	"github.com/stretchr/testify/require"
@@ -34,6 +35,34 @@ func TestValidatorInitialization(t *testing.T) {
 	require.Equal(t, 1, len(validator.addressbook))
 	require.Equal(t, 1, len(validator.signatures)) //has Dummy Signature?
 	require.Equal(t, 1, len(validator.peer.outbound))
+}
+
+func TestVRF(t *testing.T) {
+	privKey, pubKey := p256.GenerateKey()
+
+	var rands [][32]byte
+	var proofs [][]byte
+
+	seed := []byte{1, 3, 5, 7}
+	for i := 0; i < 10; i++ {
+		rand, proof := privKey.Evaluate(seed)
+		proofIndex, _ := pubKey.ProofToHash(seed, proof)
+
+		require.Equal(t, rand, proofIndex)
+		rands = append(rands, rand)
+		proofs = append(proofs, proof)
+		if i != 0 {
+			require.Equal(t, rand, rands[i-1])
+			require.NotEqual(t, proof, proofs[i-1])
+		}
+	}
+	
+	privKey2, pubKey2 := p256.GenerateKey()
+	rand2, _ := privKey2.Evaluate(seed)
+	require.NotEqual(t, rands[0], rand2)
+
+	_, err := pubKey2.ProofToHash(seed, proofs[0])
+	require.Error(t, err)
 }
 
 //TODO:: to separate and Wrap one functionality inside logic.

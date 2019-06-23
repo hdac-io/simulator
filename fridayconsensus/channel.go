@@ -14,6 +14,7 @@ type channel struct {
 type peer struct {
 	block     chan types.Block
 	signature chan types.Signature
+	vrf       chan vrfMessage
 	network   *network.Network
 }
 
@@ -21,6 +22,7 @@ func newPeer(network *network.Network) peer {
 	return peer{
 		block:     make(chan types.Block, 1024),
 		signature: make(chan types.Signature, 1024),
+		vrf:       make(chan vrfMessage, 1024),
 		network:   network,
 	}
 }
@@ -45,6 +47,8 @@ func (c *channel) start(peers []*network.Network) {
 				c.inbound.block <- v
 			case types.Signature:
 				c.inbound.signature <- v
+			case vrfMessage:
+				c.inbound.vrf <- v
 			}
 		}
 	}()
@@ -58,6 +62,8 @@ func (c *channel) start(peers []*network.Network) {
 				case load := <-outbound.signature:
 					outbound.network.Write(load)
 				case load := <-outbound.block:
+					outbound.network.Write(load)
+				case load := <-outbound.vrf:
 					outbound.network.Write(load)
 				}
 			}
@@ -79,10 +85,20 @@ func (c *channel) sendBlock(b types.Block) {
 	}
 }
 
+func (c *channel) sendVRFMessage(vrf vrfMessage) {
+	for _, out := range c.outbound {
+		out.vrf <- vrf
+	}
+}
+
 func (c *channel) readSignature() types.Signature {
 	return <-c.inbound.signature
 }
 
 func (c *channel) readBlock() types.Block {
 	return <-c.inbound.block
+}
+
+func (c *channel) readVRFMessage() vrfMessage {
+	return <-c.inbound.vrf
 }
