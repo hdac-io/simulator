@@ -19,12 +19,12 @@ func main() {
 	addressbook := make([]*network.Network, config.NumValidators+config.NumNodes)
 	id := 0
 	for id < config.NumValidators {
-		nodes[id] = node.NewValidator(config.Consensus.Consensus, id, config.Consensus.BlockTime, config.NumValidators, config.Consensus.LenULB)
+		nodes[id] = node.NewValidator(id, config.NumValidators, config.Consensus.LenULB, config.Consensus.BlockTime)
 		addressbook[id] = nodes[id].GetAddress()
 		id++
 	}
 	for id < config.NumValidators+config.NumNodes {
-		nodes[id] = node.New(id)
+		nodes[id] = node.New(id, config.NumValidators, config.Consensus.LenULB)
 	}
 
 	var wg sync.WaitGroup

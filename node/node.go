@@ -7,8 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hdac-io/simulator/node/status"
+
 	"github.com/hdac-io/simulator/block"
-	"github.com/hdac-io/simulator/consensus"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/persistent"
 	"github.com/hdac-io/simulator/signature"
@@ -17,27 +18,19 @@ import (
 
 // Node represents validator node
 type Node struct {
-	// For synchronization
-	sync.Mutex
-	cond         *sync.Cond
-	waitFinalize bool
-
 	// Chain parameters
 	parameter parameter
 
 	// Validator data
-	id              int
-	validator       bool
-	finalizedHeight int
-	confirmedHeight int
-	height          int
-	next            int
-	getRandom       func() int
-	blocks          []block.Block
+	id        int
+	validator bool
+	next      int
 
-	// Network data
-	peer        *channel
-	addressbook []*network.Network
+	// Peer-to-peer network
+	peer *channel
+
+	// Status
+	status *status.Status
 
 	// Transaction pool
 	pool *signaturepool
@@ -50,7 +43,6 @@ type Node struct {
 }
 
 type parameter struct {
-	consensus     consensus.Consensus
 	numValidators int
 	lenULB        int
 	blockTime     time.Duration
@@ -65,31 +57,30 @@ func randomSignature(unique int, max int) func() int {
 }
 
 // New constructs node
-func New(id int) *Node {
+func New(id int, numValidators, lenULB int) *Node {
+	parameter := parameter{
+		numValidators: numValidators,
+		lenULB:        lenULB,
+	}
+
 	v := &Node{
 		id:         id,
 		peer:       newChannel(),
-		blocks:     make([]block.Block, 0),
+		parameter:  parameter,
 		persistent: persistent.New(),
 		pool:       newSignaturePool(),
 		logger:     log.New("Validator", id),
 	}
-	v.cond = sync.NewCond(v)
+	v.status = status.New(id, numValidators, v.logger)
 
 	return v
 }
 
 // NewValidator constructs validator node
-func NewValidator(consensus consensus.Consensus, id int, blockTime time.Duration, numValidators int, lenULB int) *Node {
-	v := New(id)
+func NewValidator(id int, numValidators int, lenULB int, blockTime time.Duration) *Node {
+	v := New(id, numValidators, lenULB)
 	v.validator = true
-	v.parameter = parameter{
-		consensus:     consensus,
-		numValidators: numValidators,
-		lenULB:        lenULB,
-		blockTime:     blockTime,
-	}
-	v.cond = sync.NewCond(v)
+	v.parameter.blockTime = blockTime
 
 	return v
 }
@@ -100,9 +91,6 @@ func (v *Node) GetAddress() *network.Network {
 }
 
 func (v *Node) initialize(addressbook []*network.Network) bool {
-	// Prepare validator
-	v.getRandom = randomSignature(v.id, v.parameter.numValidators)
-	v.addressbook = addressbook
 	// Start channel
 	v.peer.start(addressbook)
 
@@ -163,13 +151,8 @@ func (v *Node) receiveLoop() {
 }
 
 func (v *Node) produce(nextBlockTime time.Time) time.Time {
-	// Height adjustment
-	v.height++
-	// Negative number and 0 mean there is no confirmed block
-	v.confirmedHeight = v.height - (v.parameter.lenULB + 1)
-
 	// Calculation
-	signatures := v.getRecentConfirmedSignature()
+	signatures := v.status.GetRecentConfirmedSignature()
 	chosenNumber := v.getRandomNumberFromSignatures(signatures)
 
 	// next := 0 if there is no completed block
@@ -181,7 +164,7 @@ func (v *Node) produce(nextBlockTime time.Time) time.Time {
 		// My turn
 
 		// Produce new block
-		newBlock := block.New(v.height, nextBlockTime.UnixNano(), v.id)
+		newBlock := block.New(v.status.GetHeight()+1, nextBlockTime.UnixNano(), v.id)
 
 		// Pre-prepare / send new block
 		v.peer.sendBlock(newBlock)
@@ -201,12 +184,7 @@ func (v *Node) validateBlock(b block.Block) {
 	}
 
 	v.logger.Info("Block received", "Blockheight", b.Height)
-	v.Lock()
-	if v.height != b.Height {
-		panic("Block height is mismatch !")
-	}
-	v.blocks = append(v.blocks, b)
-	v.Unlock()
+	v.status.AppendBlock(b)
 
 	// Prepare
 	v.prepare(b)
@@ -245,7 +223,7 @@ func (v *Node) prepare(b block.Block) {
 
 func (v *Node) finalize(b block.Block) {
 	// Generate random signature
-	sign := signature.New(v.id, signature.Commit, b.Height, v.getRandom())
+	sign := signature.New(v.id, signature.Commit, b.Height, v.status.GetRandom())
 
 	// Send piece to others
 	v.peer.sendSignature(sign)
@@ -254,51 +232,11 @@ func (v *Node) finalize(b block.Block) {
 	signs := v.pool.waitAndRemove(signature.Commit, b.Height, v.parameter.numValidators)
 
 	// Finalize
-	v.Lock()
-
-	for b.Height > v.finalizedHeight+1 {
-		v.logger.Warn("Previous block is not finalized yet !", "Current Finalizing height", b.Height, "Previous finalized height", v.finalizedHeight)
-		v.waitFinalize = true
-		v.cond.Wait()
-	}
-	v.finalizedHeight = b.Height
-	if v.waitFinalize {
-		v.cond.Broadcast()
-		v.waitFinalize = false
-	}
-
-	// Store finalized block
-	v.persistent.AddBlock(b)
-	v.blocks = v.blocks[1:]
-	// Store finalized signature
-	v.persistent.AddSignature(signs)
-
-	v.Unlock()
+	v.status.Finalize(b, signs)
 }
 
-func (v *Node) getCurrentBlock() block.Block {
-	b := v.getRecentBlock()
-	if b.Height != v.height {
-		return block.Block{Height: -1}
-	}
-
-	return b
-}
-
-func (v *Node) getRecentBlock() block.Block {
-	return v.blocks[len(v.blocks)-1]
-}
-
-func (v *Node) getRecentFinalizedBlock() block.Block {
-	return v.persistent.GetBlock(v.finalizedHeight)
-}
-
-func (v *Node) getRecentConfirmedBlock() block.Block {
-	return v.persistent.GetBlock(v.confirmedHeight)
-}
-
-func (v *Node) getRecentConfirmedSignature() []signature.Signature {
-	return v.persistent.GetSignature(v.confirmedHeight)
+func (v *Node) stop() {
+	// Clean validator up
 }
 
 func (v *Node) getRandomNumberFromSignatures(signs []signature.Signature) int {
@@ -310,8 +248,4 @@ func (v *Node) getRandomNumberFromSignatures(signs []signature.Signature) int {
 		sum += sign.Number
 	}
 	return sum % (v.parameter.numValidators)
-}
-
-func (v *Node) stop() {
-	// Clean validator up
 }
