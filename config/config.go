@@ -2,8 +2,6 @@ package config
 
 import (
 	"time"
-
-	"github.com/hdac-io/simulator/consensus"
 )
 
 // Config contains various configuration
@@ -14,7 +12,6 @@ type Config struct {
 }
 
 type consensusConfig struct {
-	Consensus consensus.Consensus
 	BlockTime time.Duration // Block time
 	LenULB    int           // Length of unconfirmed leading blocks
 }
@@ -22,7 +19,6 @@ type consensusConfig struct {
 // GetDefault retrieves default configuration
 func GetDefault() *Config {
 	c := consensusConfig{
-		Consensus: consensus.Get("friday"),
 		BlockTime: 1 * time.Second,
 		LenULB:    2,
 	}
