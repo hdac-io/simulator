@@ -5,9 +5,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hdac-io/simulator/node/status"
-
+	"github.com/google/keytransparency/core/crypto/vrf"
+	"github.com/google/keytransparency/core/crypto/vrf/p256"
 	"github.com/hdac-io/simulator/network"
+	"github.com/hdac-io/simulator/node/status"
 	"github.com/hdac-io/simulator/persistent"
 	log "github.com/inconshreveable/log15"
 )
@@ -39,6 +40,10 @@ type Node struct {
 
 	// Logger
 	logger log.Logger
+
+	//VRF Key Pair
+	privKey vrf.PrivateKey
+	pubKey  vrf.PublicKey
 }
 
 type parameter struct {
@@ -72,7 +77,10 @@ func New(id int, numValidators, lenULB int) *Node {
 	}
 	n.status = status.New(id, numValidators, n.logger)
 	// FIXME: configurable
-	n.consensus = newFridayBLS(n)
+	n.consensus = newFridayVRF(n)
+
+	// Initailze VRF Key Pair
+	n.privKey, n.pubKey = p256.GenerateKey()
 
 	return n
 }
@@ -123,6 +131,6 @@ func (n *Node) receiveLoop() {
 	}
 }
 
-func (v *Node) stop() {
+func (n *Node) stop() {
 	// Clean validator up
 }
