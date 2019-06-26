@@ -1,12 +1,12 @@
 package node
 
 import (
-	"bytes"
 	"encoding/hex"
 	"time"
 
 	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/signature"
+	"github.com/hdac-io/simulator/vrfmessage"
 )
 
 type fridayBLS struct {
@@ -61,12 +61,13 @@ func (f *fridayBLS) produce(nextBlockTime time.Time) time.Time {
 		// My turn
 
 		// Produce new block
-		newBlock := block.New(f.node.status.GetHeight()+1, nextBlockTime.UnixNano(), f.node.id)
+		var dummyVRF vrfmessage.VRFMessage
+		newBlock := block.New(f.node.status.GetHeight()+1, nextBlockTime.UnixNano(), f.node.id, dummyVRF)
 
 		// Pre-prepare / send new block
 		f.node.peer.sendBlock(newBlock)
-		f.node.logger.Info("Block produced", "Height", newBlock.Height, "Producer", newBlock.Producer,
-			"Timestmp", time.Unix(0, newBlock.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash))
+		f.node.logger.Info("Block produced", "Height", newBlock.Header.Height, "Producer", newBlock.Header.Producer,
+			"Timestmp", time.Unix(0, newBlock.Header.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash[:]))
 
 	}
 
@@ -80,27 +81,27 @@ func (f *fridayBLS) validateBlock(b block.Block) {
 		//return
 	}
 
-	f.node.logger.Info("Block received", "Blockheight", b.Height)
+	f.node.logger.Info("Block received", "Blockheight", b.Header.Height)
 	f.node.status.AppendBlock(b)
 
 	// Prepare
 	f.prepare(b)
-	f.node.logger.Info("Block prepared", "Blockheight", b.Height)
+	f.node.logger.Info("Block prepared", "Blockheight", b.Header.Height)
 
 	// Commit / finalize
 	f.finalize(b)
-	f.node.logger.Info("Block finalized", "Blockheight", b.Height)
+	f.node.logger.Info("Block finalized", "Blockheight", b.Header.Height)
 }
 
 // FIXME: We assume that there is no byzantine nodes
 func (f *fridayBLS) validate(b block.Block) bool {
 	// Validate producer
-	if f.node.next != b.Producer {
+	if f.node.next != b.Header.Producer {
 		return false
 	}
 
 	// Validate block hash
-	if !bytes.Equal(b.Hash, block.CalculateHashFromBlock(b)) {
+	if b.Hash != block.CalculateHashFromBlock(b) {
 		return false
 	}
 
@@ -109,24 +110,24 @@ func (f *fridayBLS) validate(b block.Block) bool {
 
 func (f *fridayBLS) prepare(b block.Block) {
 	// Generate dummy signature with -1
-	sign := signature.New(f.node.id, signature.Prepare, b.Height, -1)
+	sign := signature.New(f.node.id, signature.Prepare, b.Header.Height, -1)
 
 	// Send piece to others
 	f.node.peer.sendSignature(sign)
 
 	// Collect signatues
-	f.node.pool.waitAndRemove(signature.Prepare, b.Height, f.node.parameter.numValidators)
+	f.node.pool.waitAndRemove(signature.Prepare, b.Header.Height, f.node.parameter.numValidators)
 }
 
 func (f *fridayBLS) finalize(b block.Block) {
 	// Generate random signature
-	sign := signature.New(f.node.id, signature.Commit, b.Height, f.node.status.GetRandom())
+	sign := signature.New(f.node.id, signature.Commit, b.Header.Height, f.node.status.GetRandom())
 
 	// Send piece to others
 	f.node.peer.sendSignature(sign)
 
 	// Collect signatues
-	signs := f.node.pool.waitAndRemove(signature.Commit, b.Height, f.node.parameter.numValidators)
+	signs := f.node.pool.waitAndRemove(signature.Commit, b.Header.Height, f.node.parameter.numValidators)
 
 	// Finalize
 	f.node.status.Finalize(b, signs)

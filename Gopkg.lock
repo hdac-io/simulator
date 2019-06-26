@@ -18,6 +18,44 @@
   version = "v1.8.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:1ba1d79f2810270045c328ae5d674321db34e3aae468eb4233883b473c5c0467"
+  name = "github.com/golang/glog"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
+
+[[projects]]
+  digest = "1:318f1c959a8a740366fce4b1e1eb2fd914036b4af58fbd0a003349b305f118ad"
+  name = "github.com/golang/protobuf"
+  packages = ["proto"]
+  pruneopts = "UT"
+  revision = "b5d812f8a3706043e23a9cd5babf2e5423744d30"
+  version = "v1.3.1"
+
+[[projects]]
+  digest = "1:c7dec442e92d6218701b69bbbbefa56c11e32922153e133ab81cdd69762eda39"
+  name = "github.com/google/keytransparency"
+  packages = [
+    "core/crypto/vrf",
+    "core/crypto/vrf/p256",
+  ]
+  pruneopts = "UT"
+  revision = "36160eea697db6f72059c74d3c640e71ed64996d"
+  version = "v0.1"
+
+[[projects]]
+  digest = "1:51eda316c3df66c07542488ae5a06b0eafb47f073abf4d38c4a7d687dfa41cae"
+  name = "github.com/google/trillian"
+  packages = [
+    "crypto/keys",
+    "crypto/keyspb",
+  ]
+  pruneopts = "UT"
+  revision = "f3eaa887163bb4d2ea4b4458cb4e7c5c2f346bc6"
+  version = "v1.2.1"
+
+[[projects]]
   digest = "1:e96640e5b9ce93e2d7ee18f48048483080fd23e72e3c38bc17e9c8b77062031a"
   name = "github.com/inconshreveable/log15"
   packages = ["."]
@@ -72,6 +110,8 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/google/keytransparency/core/crypto/vrf",
+    "github.com/google/keytransparency/core/crypto/vrf/p256",
     "github.com/inconshreveable/log15",
     "github.com/stretchr/testify/require",
   ]

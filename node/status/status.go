@@ -1,6 +1,7 @@
 package status
 
 import (
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
@@ -53,17 +54,12 @@ func New(id int, max int, logger log.Logger) *Status {
 	return s
 }
 
-// GetHeight returns current block height
-func (s *Status) GetHeight() int {
-	return s.height
-}
-
 // AppendBlock appends block
 func (s *Status) AppendBlock(b block.Block) {
 	s.Lock()
 	// Increase height
 	s.height++
-	if s.height != b.Height {
+	if s.height != b.Header.Height {
 		panic("Block height mismatch !")
 	}
 	// Negative number and 0 mean there is no confirmed block
@@ -76,13 +72,13 @@ func (s *Status) AppendBlock(b block.Block) {
 // Finalize finalizing specified block
 func (s *Status) Finalize(b block.Block, signs []signature.Signature) {
 	s.Lock()
-	for b.Height > s.finalizedHeight+1 {
-		s.logger.Warn("Previous block is not finalized yet !", "Current Finalizing height", b.Height, "Previous finalized height", s.finalizedHeight)
+	for b.Header.Height > s.finalizedHeight+1 {
+		s.logger.Warn("Previous block is not finalized yet !", "Current Finalizing height", b.Header.Height, "Previous finalized height", s.finalizedHeight)
 		s.waitFinalize = true
 		s.cond.Wait()
 	}
 
-	s.finalizedHeight = b.Height
+	s.finalizedHeight = b.Header.Height
 	s.blocks = s.blocks[1:]
 
 	// Store finalized block
@@ -95,6 +91,22 @@ func (s *Status) Finalize(b block.Block, signs []signature.Signature) {
 		s.waitFinalize = false
 	}
 	s.Unlock()
+}
+
+// GetHeight returns current block height
+func (s *Status) GetHeight() int {
+	return s.height
+}
+
+// GetBlock returns target block height
+func (s *Status) GetBlock(height int) (block.Block, error) {
+	if height <= s.finalizedHeight {
+		return s.persistent.GetBlock(height), nil
+	} else if height <= s.height {
+		return s.blocks[height-s.finalizedHeight-1], nil
+	} else {
+		return block.Block{}, errors.New("out-of-index height")
+	}
 }
 
 // GetRecentBlock returns recent block

@@ -21,7 +21,7 @@ func New() Persistent {
 
 // AddBlock stores block
 func (p *Persistent) AddBlock(block block.Block) {
-	if len(p.blocks) != block.Height-1 {
+	if len(p.blocks) != block.Header.Height-1 {
 		panic("Wrong block height !")
 	}
 	p.blocks = append(p.blocks, block)

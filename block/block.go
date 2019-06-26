@@ -1,24 +1,36 @@
 package block
 
 import (
+	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
+	"encoding/gob"
+
+	"github.com/hdac-io/simulator/vrfmessage"
 )
 
-// Block represents simple block structure
-type Block struct {
-	Hash      []byte
+// BlockHeader seperated Body
+type BlockHeader struct {
 	Height    int
 	Timestamp int64
 	Producer  int
 }
 
+// Block represents simple block structure
+type Block struct {
+	Header BlockHeader
+	Hash   [32]byte
+	VRF    vrfmessage.VRFMessage
+}
+
 // New constructs block
-func New(height int, timestamp int64, producer int) Block {
+func New(height int, timestamp int64, producer int, vrf vrfmessage.VRFMessage) Block {
 	b := Block{
-		Height:    height,
-		Timestamp: timestamp,
-		Producer:  producer,
+		Header: BlockHeader{
+			Height:    height,
+			Timestamp: timestamp,
+			Producer:  producer,
+		},
+		VRF: vrf,
 	}
 	b.Hash = CalculateHashFromBlock(b)
 
@@ -26,17 +38,11 @@ func New(height int, timestamp int64, producer int) Block {
 }
 
 // CalculateHashFromBlock returns calculated hash using block contents
-func CalculateHashFromBlock(b Block) []byte {
-	hash := sha256.New()
-	buffer := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buffer, uint64(b.Height))
-	hash.Write(buffer)
-	buffer = make([]byte, 8)
-	binary.LittleEndian.PutUint64(buffer, uint64(b.Timestamp))
-	hash.Write(buffer)
-	buffer = make([]byte, 8)
-	binary.LittleEndian.PutUint64(buffer, uint64(b.Producer))
-	hash.Write(buffer)
+func CalculateHashFromBlock(b Block) [32]byte {
+	//TODO:: decide encode function(ex: ethereum-rlp, ...)
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	encoder.Encode(b.Header)
 
-	return hash.Sum(nil)
+	return sha256.Sum256(buf.Bytes())
 }
