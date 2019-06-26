@@ -61,7 +61,7 @@ func randomSignature(unique int, max int) func() int {
 }
 
 // New constructs node
-func New(id int, numValidators, lenULB int) *Node {
+func New(id int, numValidators int, lenULB int) *Node {
 	parameter := parameter{
 		numValidators: numValidators,
 		lenULB:        lenULB,
