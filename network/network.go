@@ -27,10 +27,10 @@ func NewNetwork() *Network {
 		network: make(chan load, 1024),
 		// Simulated network delay: 50ms ~ 250ms, for instant finalization
 		// getDelay: randomDelay(50, 250),
-		// Simulated network delay: 50ms ~ 600ms, for one block delayed finalization
-		// getDelay: randomDelay(50, 600),
-		// Simulated network delay: 50ms ~ 950ms, for two block delayed finalization
-		getDelay: randomDelay(50, 950),
+		// Simulated network delay: 50ms ~ 550ms, for one block delayed finalization
+		// getDelay: randomDelay(50, 550),
+		// Simulated network delay: 50ms ~ 850ms, for two block delayed finalization
+		getDelay: randomDelay(50, 850),
 	}
 }
 
