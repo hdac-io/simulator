@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
-
-	"github.com/hdac-io/simulator/vrfmessage"
 )
 
 // BlockHeader seperated Body
@@ -15,22 +13,25 @@ type BlockHeader struct {
 	Producer  int
 }
 
+//  LeaderElectionMessage interface included VRF, BLS
+type LeaderElectionMessage = interface{}
+
 // Block represents simple block structure
 type Block struct {
-	Header BlockHeader
-	Hash   [32]byte
-	VRF    vrfmessage.VRFMessage
+	Header          BlockHeader
+	Hash            [32]byte
+	ElectionMessage LeaderElectionMessage
 }
 
 // New constructs block
-func New(height int, timestamp int64, producer int, vrf vrfmessage.VRFMessage) Block {
+func New(height int, timestamp int64, producer int, electionMessage LeaderElectionMessage) Block {
 	b := Block{
 		Header: BlockHeader{
 			Height:    height,
 			Timestamp: timestamp,
 			Producer:  producer,
 		},
-		VRF: vrf,
+		ElectionMessage: electionMessage,
 	}
 	b.Hash = CalculateHashFromBlock(b)
 

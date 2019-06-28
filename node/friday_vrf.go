@@ -95,7 +95,7 @@ func (f *fridayVRF) getVRFMessage(blockHeight int) vrfmessage.VRFMessage {
 	//getting VRFMessage by previous block body
 	block, err := f.node.status.GetBlock(blockHeight)
 	if err == nil {
-		vrfMessage = block.VRF
+		vrfMessage = block.ElectionMessage.(vrfmessage.VRFMessage)
 	} else {
 		panic("out-of-index block height")
 	}
