@@ -56,6 +56,14 @@
   version = "v1.2.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:8371b8866703c836b926900616d2952840fb4044e8b74de0bae2f440ea2837d4"
+  name = "github.com/herumi/bls"
+  packages = ["ffi/go/bls"]
+  pruneopts = "UT"
+  revision = "058f18ee12f69b8693f12fd2b20df5a830ead5b7"
+
+[[projects]]
   digest = "1:e96640e5b9ce93e2d7ee18f48048483080fd23e72e3c38bc17e9c8b77062031a"
   name = "github.com/inconshreveable/log15"
   packages = ["."]
@@ -112,6 +120,7 @@
   input-imports = [
     "github.com/google/keytransparency/core/crypto/vrf",
     "github.com/google/keytransparency/core/crypto/vrf/p256",
+    "github.com/herumi/bls/ffi/go/bls",
     "github.com/inconshreveable/log15",
     "github.com/stretchr/testify/require",
   ]

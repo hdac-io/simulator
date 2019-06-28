@@ -2,6 +2,7 @@ package node
 
 import (
 	"github.com/hdac-io/simulator/block"
+	"github.com/hdac-io/simulator/blsmessage"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/signature"
 )
@@ -13,16 +14,18 @@ type channel struct {
 }
 
 type peer struct {
-	block     chan block.Block
-	signature chan signature.Signature
-	network   *network.Network
+	block               chan block.Block
+	signature           chan signature.Signature
+	blsValidatorMessage chan blsmessage.ValidatorMessage
+	network             *network.Network
 }
 
 func newPeer(network *network.Network) peer {
 	return peer{
-		block:     make(chan block.Block, 1024),
-		signature: make(chan signature.Signature, 1024),
-		network:   network,
+		block:               make(chan block.Block, 1024),
+		signature:           make(chan signature.Signature, 1024),
+		blsValidatorMessage: make(chan blsmessage.ValidatorMessage, 1024),
+		network:             network,
 	}
 }
 
@@ -46,6 +49,8 @@ func (c *channel) start(peers []*network.Network) {
 				c.inbound.block <- v
 			case signature.Signature:
 				c.inbound.signature <- v
+			case blsmessage.ValidatorMessage:
+				c.inbound.blsValidatorMessage <- v
 			}
 		}
 	}()
@@ -59,6 +64,8 @@ func (c *channel) start(peers []*network.Network) {
 				case load := <-outbound.signature:
 					outbound.network.Write(load)
 				case load := <-outbound.block:
+					outbound.network.Write(load)
+				case load := <-outbound.blsValidatorMessage:
 					outbound.network.Write(load)
 				}
 			}
@@ -80,10 +87,20 @@ func (c *channel) sendBlock(b block.Block) {
 	}
 }
 
+func (c *channel) sendValidatorMessage(message blsmessage.ValidatorMessage) {
+	for _, out := range c.outbound {
+		out.blsValidatorMessage <- message
+	}
+}
+
 func (c *channel) readSignature() signature.Signature {
 	return <-c.inbound.signature
 }
 
 func (c *channel) readBlock() block.Block {
 	return <-c.inbound.block
+}
+
+func (c *channel) readValidatorMessage() blsmessage.ValidatorMessage {
+	return <-c.inbound.blsValidatorMessage
 }

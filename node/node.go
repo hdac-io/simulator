@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hdac-io/simulator/blsmessage/bls"
+
 	"github.com/google/keytransparency/core/crypto/vrf"
 	"github.com/google/keytransparency/core/crypto/vrf/p256"
 	"github.com/hdac-io/simulator/network"
@@ -44,6 +46,10 @@ type Node struct {
 	//VRF Key Pair
 	privKey vrf.PrivateKey
 	pubKey  vrf.PublicKey
+
+	//BLS Key Pair
+	blsPrivKey bls.SecretKey
+	blsPubKey  bls.PublicKey
 }
 
 type parameter struct {
@@ -77,10 +83,18 @@ func New(id int, numValidators int, lenULB int) *Node {
 	}
 	n.status = status.New(id, numValidators, n.logger)
 	// FIXME: configurable
-	n.consensus = newFridayVRF(n)
+	n.consensus = newFridayBLS(n)
 
 	// Initailze VRF Key Pair
 	n.privKey, n.pubKey = p256.GenerateKey()
+
+	blsErr := bls.Init(bls.CurveFp254BNb)
+	if blsErr != nil {
+		panic("initialize failed")
+	}
+
+	n.blsPrivKey.SetByCSPRNG()
+	n.blsPubKey = *n.blsPrivKey.GetPublicKey()
 
 	return n
 }

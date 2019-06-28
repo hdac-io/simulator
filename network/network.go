@@ -30,7 +30,7 @@ func NewNetwork() *Network {
 		// Simulated network delay: 50ms ~ 550ms, for one block delayed finalization
 		// getDelay: randomDelay(50, 550),
 		// Simulated network delay: 50ms ~ 850ms, for two block delayed finalization
-		getDelay: randomDelay(50, 850),
+		getDelay: randomDelay(50, 500),
 	}
 }
 
