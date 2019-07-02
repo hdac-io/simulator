@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hdac-io/simulator/bls"
 	"github.com/hdac-io/simulator/config"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/node"
@@ -13,6 +14,9 @@ import (
 func main() {
 	logger := log.New("module", "main")
 	logger.Info("Initialize Validators and AddressBooks")
+
+	//Initialize External BLS Package
+	bls.Init(bls.CurveFp254BNb)
 
 	config := config.GetDefault()
 	nodes := make([]*node.Node, config.NumValidators+config.NumNodes)
