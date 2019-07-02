@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/keytransparency/core/crypto/vrf"
 	"github.com/google/keytransparency/core/crypto/vrf/p256"
+	"github.com/hdac-io/simulator/bls"
 	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/node/status"
 	"github.com/hdac-io/simulator/persistent"
@@ -44,6 +45,8 @@ type Node struct {
 	//VRF Key Pair
 	privKey vrf.PrivateKey
 	pubKey  vrf.PublicKey
+
+	blsSecretKey bls.SecretKey
 }
 
 type parameter struct {
@@ -81,6 +84,8 @@ func New(id int, numValidators int, lenULB int) *Node {
 
 	// Initailze VRF Key Pair
 	n.privKey, n.pubKey = p256.GenerateKey()
+
+	n.blsSecretKey.SetByCSPRNG()
 
 	return n
 }
