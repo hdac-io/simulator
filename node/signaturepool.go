@@ -22,7 +22,7 @@ type signaturepool struct {
 
 func newSignaturePool() *signaturepool {
 	return &signaturepool{
-		signatures: [signature.NumKind]signatureMap{make(signatureMap), make(signatureMap)},
+		signatures: [signature.NumKind]signatureMap{make(signatureMap), make(signatureMap), make(signatureMap), make(signatureMap)},
 	}
 }
 
