@@ -12,20 +12,23 @@ const (
 // NumKind is number of signatures kind
 const NumKind = 2
 
+// Dynamic Payload type for Various Kinds
+type SignatruePayload interface{}
+
 // Signature represents validation signature
 type Signature struct {
 	ID          int
 	Kind        Kind
 	BlockHeight int
-	Number      int
+	Payload     SignatruePayload
 }
 
 // New returns signature type
-func New(id int, kind Kind, height int, number int) Signature {
+func New(id int, kind Kind, height int, payload SignatruePayload) Signature {
 	return Signature{
 		ID:          id,
 		Kind:        kind,
 		BlockHeight: height,
-		Number:      number,
+		Payload:     payload,
 	}
 }

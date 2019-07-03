@@ -136,10 +136,11 @@ func (f *fridayBLS) finalize(b block.Block) {
 func (f *fridayBLS) getRandomNumberFromSignatures(signs []signature.Signature) int {
 	sum := 0
 	for _, sign := range signs {
-		if sign.Number < 0 {
+		payloadNumber := sign.Payload.(int)
+		if payloadNumber < 0 {
 			panic("Bad signature !")
 		}
-		sum += sign.Number
+		sum += payloadNumber
 	}
 	return sum % (f.node.parameter.numValidators)
 }
