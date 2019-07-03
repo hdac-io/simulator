@@ -218,14 +218,3 @@ func (f *fridayVRF) finalize(b block.Block) {
 	// Finalize
 	f.node.status.Finalize(b, signs)
 }
-
-func (f *fridayVRF) getRandomNumberFromSignatures(signs []signature.Signature) int {
-	sum := 0
-	for _, sign := range signs {
-		if sign.Number < 0 {
-			panic("Bad signature !")
-		}
-		sum += sign.Number
-	}
-	return sum % (f.node.parameter.numValidators)
-}
