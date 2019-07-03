@@ -19,6 +19,10 @@ type peer struct {
 }
 
 func newPeer(network *network.Network) peer {
+	if network == nil {
+		panic("Network must not be nil")
+	}
+
 	return peer{
 		block:     make(chan block.Block, 1024),
 		signature: make(chan signature.Signature, 1024),
@@ -36,22 +40,23 @@ func newChannel() *channel {
 }
 
 // start starts Channel architecture
-func (c *channel) start(peers []*network.Network) {
-	// Start reader
-	go func() {
-		for {
-			load := c.inbound.network.Read()
-			switch v := load.(type) {
-			case block.Block:
-				c.inbound.block <- v
-			case signature.Signature:
-				c.inbound.signature <- v
+func (c *channel) start(p *network.Network) {
+	// FIXME
+	if p == nil {
+		// Start reader
+		go func() {
+			for {
+				load := c.inbound.network.Read()
+				switch v := load.(type) {
+				case block.Block:
+					c.inbound.block <- v
+				case signature.Signature:
+					c.inbound.signature <- v
+				}
 			}
-		}
-	}()
-
-	// Start writer
-	for _, p := range peers {
+		}()
+	} else {
+		// Start writer
 		outbound := newPeer(p)
 		go func(outbound peer) {
 			for {
