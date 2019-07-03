@@ -5,12 +5,14 @@ type Kind int
 
 // Signature kind
 const (
-	Prepare Kind = 0
-	Commit  Kind = 1
+	Prepare  Kind = 0
+	Prepared Kind = 1
+	Commit   Kind = 2
+	Commited Kind = 3
 )
 
 // NumKind is number of signatures kind
-const NumKind = 2
+const NumKind = 4
 
 // Dynamic Payload type for Various Kinds
 type SignatruePayload interface{}

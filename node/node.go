@@ -46,7 +46,9 @@ type Node struct {
 	privKey vrf.PrivateKey
 	pubKey  vrf.PublicKey
 
+	//BLS Key Pair
 	blsSecretKey bls.SecretKey
+	blsPublicKey bls.PublicKey
 }
 
 type parameter struct {
@@ -80,12 +82,14 @@ func New(id int, numValidators int, lenULB int) *Node {
 	}
 	n.status = status.New(id, numValidators, n.logger)
 	// FIXME: configurable
-	n.consensus = newFridayVRF(n)
+	n.consensus = newFridayFBFT(n)
 
 	// Initailze VRF Key Pair
 	n.privKey, n.pubKey = p256.GenerateKey()
 
 	n.blsSecretKey.SetByCSPRNG()
+	n.blsPublicKey = *n.blsSecretKey.GetPublicKey()
+	n.logger.Info("created secret key", "private", n.blsSecretKey.SerializeToHexStr(), "public", n.blsPublicKey.SerializeToHexStr())
 
 	return n
 }

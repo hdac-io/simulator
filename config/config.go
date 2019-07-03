@@ -25,7 +25,7 @@ func GetDefault() *Config {
 
 	return &Config{
 		Consensus:     &c,
-		NumValidators: 3,
+		NumValidators: 5,
 		NumNodes:      0,
 	}
 }
