@@ -14,6 +14,12 @@ import (
 	log "github.com/inconshreveable/log15"
 )
 
+// Identity represents validator identity
+type Identity struct {
+	Network   *network.Network
+	PublicKey *bls.PublicKey
+}
+
 // Node represents validator node
 type Node struct {
 	// Chain parameters
@@ -26,6 +32,8 @@ type Node struct {
 	id        int
 	validator bool
 	next      int
+
+	identities []Identity
 
 	// Peer-to-peer network
 	peer *channel
@@ -42,10 +50,13 @@ type Node struct {
 	// Logger
 	logger log.Logger
 
+	sec bls.SecretKey
+
 	//VRF Key Pair
 	privKey vrf.PrivateKey
 	pubKey  vrf.PublicKey
 
+	// BLS secret
 	blsSecretKey bls.SecretKey
 }
 
@@ -82,11 +93,6 @@ func New(id int, numValidators int, lenULB int) *Node {
 	// FIXME: configurable
 	n.consensus = newFridayVRF(n)
 
-	// Initailze VRF Key Pair
-	n.privKey, n.pubKey = p256.GenerateKey()
-
-	n.blsSecretKey.SetByCSPRNG()
-
 	return n
 }
 
@@ -96,27 +102,40 @@ func NewValidator(id int, numValidators int, lenULB int, blockTime time.Duration
 	n.validator = true
 	n.parameter.blockTime = blockTime
 
+	// Initailze VRF key pair
+	n.privKey, n.pubKey = p256.GenerateKey()
+
+	// Initialize BLS secret
+	n.blsSecretKey.SetByCSPRNG()
+
 	return n
 }
 
-// GetAddress returns validator's inbound address
-func (n *Node) GetAddress() *network.Network {
-	return n.peer.inbound.network
+// GetIdentity returns validator's inbound address and public key
+func (n *Node) GetIdentity() Identity {
+	return Identity{
+		Network:   n.peer.inbound.network,
+		PublicKey: n.blsSecretKey.GetPublicKey(),
+	}
 }
 
-func (n *Node) initialize(addressbook []*network.Network) bool {
+func (n *Node) initialize(identities []Identity) bool {
 	// Start channel
-	n.peer.start(addressbook)
+	n.peer.start(nil)
+	for _, id := range identities {
+		n.peer.start(id.Network)
+	}
 
-	//FIXME: more detail successful
+	n.identities = identities
+
 	return true
 }
 
 // Start starts validator with genesis time
-func (n *Node) Start(genesisTime time.Time, addressbook []*network.Network, wg *sync.WaitGroup) {
+func (n *Node) Start(genesisTime time.Time, identities []Identity, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if !n.initialize(addressbook) {
+	if !n.initialize(identities) {
 		panic("Initialization failed !")
 	}
 
