@@ -168,16 +168,16 @@ func (f *fridayVRF) validateBlock(b block.Block) {
 		//return
 	}
 
-	f.node.logger.Info("Block received", "Blockheight", b.Header.Height)
+	f.node.logger.Info("Block received", "Height", b.Header.Height)
 	f.node.status.AppendBlock(b)
 
 	// Prepare
 	f.prepare(b)
-	f.node.logger.Info("Block prepared", "Blockheight", b.Header.Height)
+	f.node.logger.Info("Block prepared", "Height", b.Header.Height)
 
 	// Commit / finalize
 	f.finalize(b)
-	f.node.logger.Info("Block finalized", "Blockheight", b.Header.Height)
+	f.node.logger.Info("Block finalized", "Height", b.Header.Height)
 }
 
 // FIXME: We assume that there is no byzantine nodes
@@ -204,7 +204,7 @@ func (f *fridayVRF) prepare(b block.Block) {
 	f.node.peer.sendSignature(sign)
 
 	// Collect signatures
-	f.collectSignatures(b)
+	f.collectSignatures(signature.Prepare, b)
 }
 
 func (f *fridayVRF) finalize(b block.Block) {
@@ -216,14 +216,14 @@ func (f *fridayVRF) finalize(b block.Block) {
 	f.node.peer.sendSignature(sign)
 
 	// Collect signatures
-	signs := f.collectSignatures(b)
+	signs := f.collectSignatures(signature.Commit, b)
 
 	// Finalize
 	f.node.status.Finalize(b, signs)
 }
 
-func (f *fridayVRF) collectSignatures(b block.Block) []signature.Signature {
-	signs := f.node.pool.waitAndRemove(signature.Prepare, b.Header.Height, f.node.parameter.numValidators)
+func (f *fridayVRF) collectSignatures(kind signature.Kind, b block.Block) []signature.Signature {
+	signs := f.node.pool.waitAndRemove(kind, b.Header.Height, f.node.parameter.numValidators)
 	for _, s := range signs {
 		id := s.ID
 		pubkey := f.node.identities[id].PublicKey

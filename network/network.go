@@ -5,11 +5,17 @@ import (
 	"time"
 )
 
-func randomDelay(min int, max int) func() time.Duration {
+// Simulated network delay: 50ms ~ 250ms, for instant finalization
+// Simulated network delay: 50ms ~ 550ms, for one block delayed finalization
+// Simulated network delay: 50ms ~ 850ms, for two block delayed finalization
+const delayMin = 50
+const delayMax = 850
+
+func randomDelay() func() time.Duration {
 	seed := int64(time.Now().Nanosecond())
 	random := rand.New(rand.NewSource(seed))
 	return func() time.Duration {
-		return time.Duration(min+random.Intn(max-min)) * time.Millisecond
+		return time.Duration(delayMin+random.Intn(delayMax-delayMin)) * time.Millisecond
 	}
 }
 
@@ -17,20 +23,30 @@ type load = interface{}
 
 // Network represents virtual public network
 type Network struct {
-	network  chan load
+	Unique   int
+	inbound  chan load
+	outbound chan load
 	getDelay func() time.Duration
 }
 
-// NewNetwork construct Network
-func NewNetwork() *Network {
-	return &Network{
-		network: make(chan load, 1024),
-		// Simulated network delay: 50ms ~ 250ms, for instant finalization
-		// getDelay: randomDelay(50, 250),
-		// Simulated network delay: 50ms ~ 550ms, for one block delayed finalization
-		// getDelay: randomDelay(50, 550),
-		// Simulated network delay: 50ms ~ 850ms, for two block delayed finalization
-		getDelay: randomDelay(50, 850),
+// NewNetwork returns networ
+func NewNetwork(address Address) Network {
+	return Network{
+		Unique:   address.Unique,
+		inbound:  make(chan load, 1024),
+		outbound: make(chan load, 1024),
+		getDelay: randomDelay(),
+	}
+}
+
+// NewLoopbackNetwork returns networ
+func NewLoopbackNetwork(address Address) Network {
+	c := make(chan load, 1024)
+	return Network{
+		Unique:   address.Unique,
+		inbound:  c,
+		outbound: c,
+		getDelay: randomDelay(),
 	}
 }
 
@@ -38,11 +54,11 @@ func NewNetwork() *Network {
 func (n *Network) Write(l load) {
 	go func() {
 		time.Sleep(n.getDelay())
-		n.network <- l
+		n.outbound <- l
 	}()
 }
 
 // Read load from virtual network
 func (n *Network) Read() load {
-	return <-n.network
+	return <-n.inbound
 }

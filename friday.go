@@ -14,7 +14,7 @@ func main() {
 	logger := log.New("module", "main")
 	logger.Info("Initialize Validators and AddressBooks")
 
-	//Initialize External BLS Package
+	// Initialize external BLS package
 	bls.Init(bls.CurveFp254BNb)
 
 	config := config.GetDefault()
