@@ -16,7 +16,7 @@ import (
 
 // Identity represents validator identity
 type Identity struct {
-	Network   *network.Network
+	Address   network.Address
 	PublicKey *bls.PublicKey
 }
 
@@ -114,16 +114,20 @@ func NewValidator(id int, numValidators int, lenULB int, blockTime time.Duration
 // GetIdentity returns validator's inbound address and public key
 func (n *Node) GetIdentity() Identity {
 	return Identity{
-		Network:   n.peer.inbound.network,
+		Address:   n.peer.address,
 		PublicKey: n.blsSecretKey.GetPublicKey(),
 	}
 }
 
 func (n *Node) initialize(identities []Identity) bool {
 	// Start channel
-	n.peer.start(nil)
-	for _, id := range identities {
-		n.peer.start(id.Network)
+
+	// FIXME
+	// Node has higher ID connect to nodes have lower ID
+	id := 0
+	for id <= n.id {
+		n.peer.addPeer(identities[id].Address)
+		id++
 	}
 
 	n.identities = identities
