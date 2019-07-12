@@ -1,7 +1,7 @@
 package node
 
 import (
-	"sync/atomic"
+	"sync"
 
 	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/network"
@@ -10,8 +10,9 @@ import (
 
 // channel represents inbound and outbound channel
 type channel struct {
+	sync.Mutex
 	address network.Address
-	peers   map[int]*peer
+	peers   map[network.Address]*peer
 
 	// for inbound
 	block     chan block.Block
@@ -28,17 +29,14 @@ func newPeer(network network.Network) *peer {
 	}
 }
 
-var unique int32
-
 // newChannel construct channel
 func newChannel() *channel {
 	c := channel{
-		address:   network.NewAddress(int(unique)),
-		peers:     make(map[int]*peer),
+		address:   network.NewAddress(),
+		peers:     make(map[network.Address]*peer),
 		block:     make(chan block.Block, 1024),
 		signature: make(chan signature.Signature, 1024),
 	}
-	atomic.AddInt32(&unique, 1)
 
 	// Start connection listener
 	c.startConnectionListner()
@@ -47,7 +45,7 @@ func newChannel() *channel {
 }
 
 func (c *channel) addPeer(destination network.Address) {
-	_, exist := c.peers[destination.Unique]
+	_, exist := c.peers[destination]
 	if exist {
 		return
 	}
@@ -88,9 +86,11 @@ func (c *channel) startConnectionListner() {
 }
 
 func (c *channel) setPeer(p *peer) {
-	_, exist := c.peers[p.network.Unique]
+	address := p.network.GetAddress()
+	c.Lock()
+	_, exist := c.peers[address]
 	if !exist {
-		c.peers[p.network.Unique] = p
+		c.peers[address] = p
 
 		// Start reader
 		go func() {
@@ -105,4 +105,5 @@ func (c *channel) setPeer(p *peer) {
 			}
 		}()
 	}
+	c.Unlock()
 }
