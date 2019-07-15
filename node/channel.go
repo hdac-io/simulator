@@ -32,7 +32,8 @@ func newPeer(network network.Network) *peer {
 // newChannel construct channel
 func newChannel() *channel {
 	c := channel{
-		address:   network.NewAddress(),
+		//address:   network.NewVirtualAddress(),
+		address:   network.NewTCPAddress(),
 		peers:     make(map[network.Address]*peer),
 		block:     make(chan block.Block, 1024),
 		signature: make(chan signature.Signature, 1024),
@@ -43,6 +44,8 @@ func newChannel() *channel {
 
 	return &c
 }
+
+var local network.Network
 
 func (c *channel) addPeer(destination network.Address) {
 	_, exist := c.peers[destination]
@@ -56,12 +59,16 @@ func (c *channel) addPeer(destination network.Address) {
 }
 
 func (c *channel) sendSignature(sign signature.Signature) {
+	// FIXME: loopback
+	c.signature <- sign
 	for _, peer := range c.peers {
 		peer.network.Write(sign)
 	}
 }
 
 func (c *channel) sendBlock(b block.Block) {
+	// FIXME: loopback
+	c.block <- b
 	for _, peer := range c.peers {
 		peer.network.Write(b)
 	}
@@ -87,6 +94,7 @@ func (c *channel) startConnectionListner() {
 
 func (c *channel) setPeer(p *peer) {
 	address := p.network.GetAddress()
+	// FIXME: very naive locking mechanism
 	c.Lock()
 	_, exist := c.peers[address]
 	if !exist {

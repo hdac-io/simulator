@@ -9,8 +9,8 @@ type virtualAddress struct {
 	network chan Network
 }
 
-// NewAddress construct Address struct
-func NewAddress() Address {
+// NewVirtualAddress construct Address struct
+func NewVirtualAddress() Address {
 	address := virtualAddress{
 		unique:  int(unique),
 		network: make(chan Network),
@@ -27,15 +27,15 @@ func (a virtualAddress) Listen() Network {
 
 // Connect construct connection to destination
 func (a virtualAddress) Connect(destination Address) Network {
-	var network *VirtualNetwork
+	var network *virtualNetwork
 	dest := destination.(virtualAddress)
 	if a.unique == dest.unique {
-		network = newLoopback(destination).(*VirtualNetwork)
+		network = newLoopback(destination).(*virtualNetwork)
 	} else {
-		network = new(destination).(*VirtualNetwork)
+		network = new(destination).(*virtualNetwork)
 
 		// swap inbound and outbound
-		destNetwork := VirtualNetwork{
+		destNetwork := virtualNetwork{
 			address:  a,
 			inbound:  network.outbound,
 			outbound: network.inbound,

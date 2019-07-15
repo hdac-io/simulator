@@ -1,13 +1,10 @@
 package vrfmessage
 
-import (
-	"github.com/google/keytransparency/core/crypto/vrf"
-)
-
+// VRFMessage contains VRF validation informations
 type VRFMessage struct {
 	Rand                   [32]byte
 	Proof                  []byte
 	PreviousProposerID     int
-	PreviousProposerPubkey vrf.PublicKey
+	PreviousProposerPubkey []byte
 	PreviousBlockHeight    int
 }

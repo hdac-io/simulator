@@ -20,15 +20,15 @@ func randomDelay() func() time.Duration {
 }
 
 // VirtualNetwork represents virtual public network
-type VirtualNetwork struct {
+type virtualNetwork struct {
 	address  Address
 	inbound  chan load
 	outbound chan load
 	getDelay func() time.Duration
 }
 
-func newVirtualNetwork(address Address) *VirtualNetwork {
-	return &VirtualNetwork{
+func newVirtualNetwork(address Address) *virtualNetwork {
+	return &virtualNetwork{
 		address:  address,
 		inbound:  make(chan load, 1024),
 		outbound: make(chan load, 1024),
@@ -36,9 +36,9 @@ func newVirtualNetwork(address Address) *VirtualNetwork {
 	}
 }
 
-func newVirtualLoopbackNetwork(address Address) *VirtualNetwork {
+func newVirtualLoopbackNetwork(address Address) *virtualNetwork {
 	c := make(chan load, 1024)
-	return &VirtualNetwork{
+	return &virtualNetwork{
 		address:  address,
 		inbound:  c,
 		outbound: c,
@@ -47,12 +47,12 @@ func newVirtualLoopbackNetwork(address Address) *VirtualNetwork {
 }
 
 // Read load from virtual network
-func (n *VirtualNetwork) Read() load {
+func (n *virtualNetwork) Read() load {
 	return <-n.inbound
 }
 
 // Write load to virtual network
-func (n *VirtualNetwork) Write(l load) {
+func (n *virtualNetwork) Write(l load) {
 	go func() {
 		time.Sleep(n.getDelay())
 		n.outbound <- l
@@ -60,6 +60,6 @@ func (n *VirtualNetwork) Write(l load) {
 }
 
 // GetAddress retrieves network address
-func (n *VirtualNetwork) GetAddress() Address {
+func (n *virtualNetwork) GetAddress() Address {
 	return n.address
 }

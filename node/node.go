@@ -52,7 +52,7 @@ type Node struct {
 
 	sec bls.SecretKey
 
-	//VRF Key Pair
+	// VRF Key Pair
 	privKey vrf.PrivateKey
 	pubKey  vrf.PublicKey
 
@@ -125,7 +125,7 @@ func (n *Node) initialize(identities []Identity) bool {
 	// FIXME
 	// Node has higher ID connect to nodes have lower ID
 	id := 0
-	for id <= n.id {
+	for id < n.id {
 		n.peer.addPeer(identities[id].Address)
 		id++
 	}
