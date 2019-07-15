@@ -6,6 +6,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/keytransparency/core/crypto/vrf/p256"
+
 	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/bls"
 	"github.com/hdac-io/simulator/signature"
@@ -56,7 +58,7 @@ func (f *fridayVRF) makeVRFMessage(blockHash [32]byte, height int) vrfmessage.VR
 		Rand:                   rand,
 		Proof:                  proof,
 		PreviousProposerID:     f.node.id,
-		PreviousProposerPubkey: f.node.pubKey,
+		PreviousProposerPubkey: f.node.pubKey.Serialize(),
 		PreviousBlockHeight:    height,
 	}
 	return message
@@ -67,11 +69,12 @@ func (f *fridayVRF) validateVRFMessage(message vrfmessage.VRFMessage) error {
 	if message.PreviousBlockHeight != f.node.status.GetHeight()-1 {
 		return errors.New("Received previousBlockHeight is not equal then validator local height-1")
 	}
-
 	var targetHash [32]byte
 	targetBlock, _ := f.node.status.GetBlock(message.PreviousBlockHeight)
 	targetHash = targetBlock.Hash
-	proofRand, err := message.PreviousProposerPubkey.ProofToHash(
+	_, pubkey := p256.GenerateKey()
+	pubkey.Deserialize(message.PreviousProposerPubkey)
+	proofRand, err := pubkey.ProofToHash(
 		targetHash[:],
 		message.Proof)
 	if proofRand != message.Rand || err != nil {
@@ -196,9 +199,9 @@ func (f *fridayVRF) validate(b block.Block) error {
 }
 
 func (f *fridayVRF) prepare(b block.Block) {
-	// Generate dummy signature with -1
 	message := string(b.Hash[:])
-	sign := signature.New(f.node.id, signature.Prepare, b.Header.Height, f.node.blsSecretKey.Sign(message))
+	blsSign := f.node.blsSecretKey.Sign(message)
+	sign := signature.New(f.node.id, signature.Prepare, b.Header.Height, blsSign.Serialize())
 
 	// Send piece to others
 	f.node.peer.sendSignature(sign)
@@ -210,7 +213,8 @@ func (f *fridayVRF) prepare(b block.Block) {
 func (f *fridayVRF) finalize(b block.Block) {
 	// Generate random signature
 	message := string(b.Hash[:])
-	sign := signature.New(f.node.id, signature.Commit, b.Header.Height, f.node.blsSecretKey.Sign(message))
+	blsSign := f.node.blsSecretKey.Sign(message)
+	sign := signature.New(f.node.id, signature.Commit, b.Header.Height, blsSign.Serialize())
 
 	// Send piece to others
 	f.node.peer.sendSignature(sign)
@@ -227,8 +231,10 @@ func (f *fridayVRF) collectSignatures(kind signature.Kind, b block.Block) []sign
 	for _, s := range signs {
 		id := s.ID
 		pubkey := f.node.identities[id].PublicKey
-		payload := s.Payload.(*bls.Sign)
-		if !payload.Verify(pubkey, string(b.Hash[:])) {
+		blsSign := bls.Sign{}
+		payload := s.Payload.([]byte)
+		blsSign.Deserialize(payload)
+		if !blsSign.Verify(pubkey, string(b.Hash[:])) {
 			panic("There should be no Byzantine nodes !")
 		}
 	}
