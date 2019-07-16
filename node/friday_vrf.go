@@ -209,8 +209,7 @@ func (f *fridayVRF) validate(b block.Block) error {
 }
 
 func (f *fridayVRF) prepare(b block.Block) {
-	message := string(b.Hash[:])
-	blsSign := f.node.blsSecretKey.Sign(message)
+	blsSign := f.node.blsSecretKey.SignHash(b.Hash[:])
 	sign := signature.New(f.node.id, signature.Prepare, b.Header.Height, blsSign.Serialize())
 
 	// Send piece to others
@@ -222,8 +221,7 @@ func (f *fridayVRF) prepare(b block.Block) {
 
 func (f *fridayVRF) finalize(b block.Block) {
 	// Generate random signature
-	message := string(b.Hash[:])
-	blsSign := f.node.blsSecretKey.Sign(message)
+	blsSign := f.node.blsSecretKey.SignHash(b.Hash[:])
 	sign := signature.New(f.node.id, signature.Commit, b.Header.Height, blsSign.Serialize())
 
 	// Send piece to others
@@ -247,7 +245,7 @@ func (f *fridayVRF) collectSignatures(kind signature.Kind, b block.Block) []sign
 		blsSign := bls.Sign{}
 		payload := s.Payload.([]byte)
 		blsSign.Deserialize(payload)
-		if !blsSign.Verify(&pubkey, string(b.Hash[:])) {
+		if !blsSign.VerifyHash(&pubkey, b.Hash[:]) {
 			panic("There should be no Byzantine nodes !")
 		}
 	}
