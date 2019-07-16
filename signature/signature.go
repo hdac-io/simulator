@@ -1,5 +1,7 @@
 package signature
 
+import "github.com/hdac-io/simulator/types"
+
 // Kind is signature enum type
 type Kind int
 
@@ -17,14 +19,14 @@ type Payload interface{}
 
 // Signature represents validation signature
 type Signature struct {
-	ID          int
+	ID          types.ID
 	Kind        Kind
 	BlockHeight int
 	Payload     Payload
 }
 
 // New returns signature type
-func New(id int, kind Kind, height int, payload Payload) Signature {
+func New(id types.ID, kind Kind, height int, payload Payload) Signature {
 	return Signature{
 		ID:          id,
 		Kind:        kind,

@@ -5,14 +5,15 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 
+	"github.com/hdac-io/simulator/types"
 	"github.com/hdac-io/simulator/vrfmessage"
 )
 
-// BlockHeader seperated Body
+// BlockHeader represents block header
 type BlockHeader struct {
 	Height    int
 	Timestamp int64
-	Producer  int
+	Producer  types.ID
 }
 
 // Block represents simple block structure
@@ -23,7 +24,7 @@ type Block struct {
 }
 
 // New constructs block
-func New(height int, timestamp int64, producer int, vrf vrfmessage.VRFMessage) Block {
+func New(height int, timestamp int64, producer types.ID, vrf vrfmessage.VRFMessage) Block {
 	b := Block{
 		Header: BlockHeader{
 			Height:    height,

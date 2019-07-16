@@ -11,6 +11,7 @@ import (
 	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/bls"
 	"github.com/hdac-io/simulator/signature"
+	"github.com/hdac-io/simulator/types"
 	"github.com/hdac-io/simulator/vrfmessage"
 )
 
@@ -41,12 +42,12 @@ func (f *fridayVRF) produceLoop(genesisTime time.Time) {
 func (f *fridayVRF) validationLoop() {
 	if f.node.parameter.lenULB == 0 {
 		for {
-			block := f.node.peer.readBlock()
+			block := f.node.channel.readBlock()
 			f.validateBlock(block)
 		}
 	} else {
 		for {
-			block := f.node.peer.readBlock()
+			block := f.node.channel.readBlock()
 			go f.validateBlock(block)
 		}
 	}
@@ -87,8 +88,8 @@ func (f *fridayVRF) validateVRFMessage(message vrfmessage.VRFMessage) error {
 func (f *fridayVRF) calculateBPIDByVRF(message vrfmessage.VRFMessage) int {
 	// TODO::check overflow when based 32bit system
 	so := int(binary.LittleEndian.Uint32(message.Rand[:]))
-	chosenNumber := so % f.node.parameter.numValidators
-	f.node.logger.Debug("Received vrf-rand to chosenNumber", "so", so, "chosenNumber", chosenNumber)
+	chosenNumber := so%f.node.parameter.numValidators + 1
+	f.node.logger.Debug("Calculate next validator", "Next validator", chosenNumber)
 
 	return chosenNumber
 }
@@ -128,11 +129,11 @@ func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
 	} else {
 		// TODO::FIXME refectoring to initializeGenesisBlock
 		// When firstly producing genesis block, cannot have previous block status
-		chosenNumber = 0
+		chosenNumber = 1
 	}
 
 	// next := 0 if there is no completed block
-	f.node.next = chosenNumber
+	f.node.next = types.ID(chosenNumber)
 
 	if f.node.next != f.node.id {
 		// Not my turn
@@ -154,7 +155,7 @@ func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
 		newBlock := block.New(f.node.status.GetHeight()+1, nextBlockTime.UnixNano(), f.node.id, vrf)
 
 		// Pre-prepare / send new block
-		f.node.peer.sendBlock(newBlock)
+		f.node.channel.sendBlock(newBlock)
 		f.node.logger.Info("Block produced", "Height", newBlock.Header.Height, "Producer", newBlock.Header.Producer,
 			"Timestmp", time.Unix(0, newBlock.Header.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash[:]))
 
@@ -185,6 +186,12 @@ func (f *fridayVRF) validateBlock(b block.Block) {
 
 // FIXME: We assume that there is no byzantine nodes
 func (f *fridayVRF) validate(b block.Block) error {
+	// FIXME: we should wait next validator calculation
+	for f.node.next == 0 {
+		time.Sleep(10 * time.Millisecond)
+
+	}
+
 	// Validate producer
 	if f.node.next != b.Header.Producer {
 		return errors.New("Invalid producer")
@@ -195,6 +202,9 @@ func (f *fridayVRF) validate(b block.Block) error {
 		return errors.New("Invalid block hash")
 	}
 
+	// FIXME: we should wait next validator calculation
+	f.node.next = 0
+
 	return nil
 }
 
@@ -204,7 +214,7 @@ func (f *fridayVRF) prepare(b block.Block) {
 	sign := signature.New(f.node.id, signature.Prepare, b.Header.Height, blsSign.Serialize())
 
 	// Send piece to others
-	f.node.peer.sendSignature(sign)
+	f.node.channel.sendSignature(sign)
 
 	// Collect signatures
 	f.collectSignatures(signature.Prepare, b)
@@ -217,7 +227,7 @@ func (f *fridayVRF) finalize(b block.Block) {
 	sign := signature.New(f.node.id, signature.Commit, b.Header.Height, blsSign.Serialize())
 
 	// Send piece to others
-	f.node.peer.sendSignature(sign)
+	f.node.channel.sendSignature(sign)
 
 	// Collect signatures
 	signs := f.collectSignatures(signature.Commit, b)
@@ -230,11 +240,14 @@ func (f *fridayVRF) collectSignatures(kind signature.Kind, b block.Block) []sign
 	signs := f.node.pool.waitAndRemove(kind, b.Header.Height, f.node.parameter.numValidators)
 	for _, s := range signs {
 		id := s.ID
-		pubkey := f.node.identities[id].PublicKey
+		// FIXME
+		pubkey := bls.PublicKey{}
+		pubkey.DeserializeHexStr(f.node.addressbook[id].PublicKey)
+
 		blsSign := bls.Sign{}
 		payload := s.Payload.([]byte)
 		blsSign.Deserialize(payload)
-		if !blsSign.Verify(pubkey, string(b.Hash[:])) {
+		if !blsSign.Verify(&pubkey, string(b.Hash[:])) {
 			panic("There should be no Byzantine nodes !")
 		}
 	}

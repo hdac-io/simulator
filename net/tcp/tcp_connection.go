@@ -1,24 +1,24 @@
-package network
+package tcp
 
 import (
 	"encoding/gob"
 	"io"
 	"net"
 
+	mynet "github.com/hdac-io/simulator/net"
 	"github.com/hdac-io/simulator/signature"
 
 	"github.com/hdac-io/simulator/block"
 )
 
-// VirtualNetwork represents virtual public network
-type tcpNetwork struct {
-	address    Address
+type connection struct {
+	address    mynet.Address
 	connection net.Conn
 	encoder    *gob.Encoder
 	decoder    *gob.Decoder
 }
 
-func newTCPNetwork(address Address, conn net.Conn) *tcpNetwork {
+func newConnection(address mynet.Address, conn net.Conn) connection {
 	if conn == nil {
 		panic("Connection is nil !!")
 	}
@@ -26,7 +26,7 @@ func newTCPNetwork(address Address, conn net.Conn) *tcpNetwork {
 	gob.Register(block.Block{})
 	gob.Register(signature.Signature{})
 
-	return &tcpNetwork{
+	return connection{
 		address:    address,
 		connection: conn,
 		encoder:    gob.NewEncoder(conn),
@@ -35,23 +35,23 @@ func newTCPNetwork(address Address, conn net.Conn) *tcpNetwork {
 }
 
 type packet struct {
-	Load load
+	Load mynet.Load
 }
 
-// Write load to virtual network
-func (n *tcpNetwork) Write(l load) {
+// Write load to TCP network
+func (c connection) Write(l mynet.Load) {
 	go func() {
-		err := n.encoder.Encode(packet{Load: l})
+		err := c.encoder.Encode(packet{Load: l})
 		if err != nil {
 			panic(err)
 		}
 	}()
 }
 
-// Read load from virtual network
-func (n *tcpNetwork) Read() load {
+// Read load from TCP network
+func (c connection) Read() mynet.Load {
 	p := packet{}
-	err := n.decoder.Decode(&p)
+	err := c.decoder.Decode(&p)
 	if err != nil && err != io.EOF {
 		panic(err)
 	}
@@ -60,6 +60,6 @@ func (n *tcpNetwork) Read() load {
 }
 
 // GetAddress retrieves network address
-func (n *tcpNetwork) GetAddress() Address {
-	return n.address
+func (c connection) GetAddress() mynet.Address {
+	return c.address
 }

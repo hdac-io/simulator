@@ -1,24 +1,17 @@
 package node
 
 import (
-	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/google/keytransparency/core/crypto/vrf"
 	"github.com/google/keytransparency/core/crypto/vrf/p256"
 	"github.com/hdac-io/simulator/bls"
-	"github.com/hdac-io/simulator/network"
 	"github.com/hdac-io/simulator/node/status"
 	"github.com/hdac-io/simulator/persistent"
+	"github.com/hdac-io/simulator/types"
 	log "github.com/inconshreveable/log15"
 )
-
-// Identity represents validator identity
-type Identity struct {
-	Address   network.Address
-	PublicKey *bls.PublicKey
-}
 
 // Node represents validator node
 type Node struct {
@@ -29,14 +22,15 @@ type Node struct {
 	consensus consensus
 
 	// Validator data
-	id        int
+	id        types.ID
 	validator bool
-	next      int
+	next      types.ID
 
-	identities []Identity
+	// Address book
+	addressbook Addressbook
 
-	// Peer-to-peer network
-	peer *channel
+	// Peer-to-channel network
+	channel *channel
 
 	// Status
 	status *status.Status
@@ -49,8 +43,6 @@ type Node struct {
 
 	// Logger
 	logger log.Logger
-
-	sec bls.SecretKey
 
 	// VRF Key Pair
 	privKey vrf.PrivateKey
@@ -66,30 +58,23 @@ type parameter struct {
 	blockTime     time.Duration
 }
 
-func randomSignature(unique int, max int) func() int {
-	seed := int64(time.Now().Nanosecond() + unique)
-	random := rand.New(rand.NewSource(seed))
-	return func() int {
-		return random.Intn(max)
-	}
-}
-
 // New constructs node
-func New(id int, numValidators int, lenULB int) *Node {
+func New(id types.ID, addressbook Addressbook, lenULB int) *Node {
 	parameter := parameter{
-		numValidators: numValidators,
+		numValidators: len(addressbook),
 		lenULB:        lenULB,
 	}
 
 	n := &Node{
-		id:         id,
-		peer:       newChannel(),
-		parameter:  parameter,
-		persistent: persistent.New(),
-		pool:       newSignaturePool(),
-		logger:     log.New("Validator", id),
+		id:          id,
+		addressbook: addressbook,
+		channel:     newChannel(addressbook[id]),
+		parameter:   parameter,
+		persistent:  persistent.New(),
+		pool:        newSignaturePool(),
+		logger:      log.New("Validator", id),
 	}
-	n.status = status.New(id, numValidators, n.logger)
+	n.status = status.New(int64(id), len(addressbook), n.logger)
 	// FIXME: configurable
 	n.consensus = newFridayVRF(n)
 
@@ -97,49 +82,36 @@ func New(id int, numValidators int, lenULB int) *Node {
 }
 
 // NewValidator constructs validator node
-func NewValidator(id int, numValidators int, lenULB int, blockTime time.Duration) *Node {
-	n := New(id, numValidators, lenULB)
+func NewValidator(id types.ID, addressbook Addressbook, lenULB int, blockTime time.Duration) *Node {
+	n := New(id, addressbook, lenULB)
 	n.validator = true
 	n.parameter.blockTime = blockTime
 
 	// Initailze VRF key pair
+	n.logger.Info("Initialize VRF key")
 	n.privKey, n.pubKey = p256.GenerateKey()
 
 	// Initialize BLS secret
-	n.blsSecretKey.SetByCSPRNG()
+	n.logger.Info("Initialize BLS key")
+	n.blsSecretKey.DeserializeHexStr(addressbook[id].Secret)
 
 	return n
 }
 
-// GetIdentity returns validator's inbound address and public key
-func (n *Node) GetIdentity() Identity {
-	return Identity{
-		Address:   n.peer.address,
-		PublicKey: n.blsSecretKey.GetPublicKey(),
-	}
-}
-
-func (n *Node) initialize(identities []Identity) bool {
-	// Start channel
-
-	// FIXME
-	// Node has higher ID connect to nodes have lower ID
-	id := 0
-	for id < n.id {
-		n.peer.addPeer(identities[id].Address)
-		id++
-	}
-
-	n.identities = identities
+func (n *Node) prepare() bool {
+	// Add known peers
+	n.channel.addKnownPeers(n.addressbook)
 
 	return true
 }
 
 // Start starts validator with genesis time
-func (n *Node) Start(genesisTime time.Time, identities []Identity, wg *sync.WaitGroup) {
+func (n *Node) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	if !n.initialize(identities) {
+	// Prepare peer-to-peer network
+	time.Sleep(genesisTime.Add(-4 * time.Second).Sub(time.Now()))
+	if !n.prepare() {
 		panic("Initialization failed !")
 	}
 
@@ -154,7 +126,7 @@ func (n *Node) Start(genesisTime time.Time, identities []Identity, wg *sync.Wait
 
 func (n *Node) receiveLoop() {
 	for {
-		signature := n.peer.readSignature()
+		signature := n.channel.readSignature()
 		n.pool.add(signature.Kind, signature)
 	}
 }
