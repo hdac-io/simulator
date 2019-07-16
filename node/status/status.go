@@ -67,6 +67,14 @@ func (s *Status) AppendBlock(b block.Block) {
 	s.Unlock()
 }
 
+// Analysis represents data for analysis
+var Analysis struct {
+	sync.Mutex
+	Enabled bool
+	// LaziestFinalizedTime contains laziest finalized time
+	LaziestFinalizedTime time.Duration
+}
+
 // Finalize finalizing specified block
 func (s *Status) Finalize(b block.Block, signs []signature.Signature) {
 	s.Lock()
@@ -89,6 +97,17 @@ func (s *Status) Finalize(b block.Block, signs []signature.Signature) {
 		s.waitFinalize = false
 	}
 	s.Unlock()
+
+	// For analysis
+	if Analysis.Enabled {
+		blockTime := time.Unix(0, b.Header.Timestamp)
+		finalizedTime := time.Now().Sub(blockTime)
+		Analysis.Lock()
+		if Analysis.LaziestFinalizedTime < finalizedTime {
+			Analysis.LaziestFinalizedTime = finalizedTime
+		}
+		Analysis.Unlock()
+	}
 }
 
 // GetHeight returns current block height

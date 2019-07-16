@@ -69,10 +69,14 @@ func (c *channel) addKnownPeers(addressbook Addressbook) {
 }
 
 func (c *channel) addPeer(destination net.Address) {
+	// FIXME: very naive locking mechanism
+	c.Lock()
 	_, exist := c.peers[destination]
 	if exist {
+		c.Unlock()
 		return
 	}
+	c.Unlock()
 
 	dest := c.tcp.Connect(destination)
 	peer := newPeer(dest)
@@ -113,6 +117,7 @@ func (c *channel) setPeer(p *peer) {
 	address := p.connection.GetAddress()
 	// FIXME: very naive locking mechanism
 	c.Lock()
+	defer c.Unlock()
 	_, exist := c.peers[address]
 	if !exist {
 		c.peers[address] = p
@@ -132,5 +137,4 @@ func (c *channel) setPeer(p *peer) {
 	} else {
 		panic("Cannot enter here !")
 	}
-	c.Unlock()
 }

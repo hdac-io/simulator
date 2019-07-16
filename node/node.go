@@ -109,13 +109,13 @@ func (n *Node) prepare() bool {
 func (n *Node) Start(genesisTime time.Time, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	// Prepare peer-to-peer network
+	// Prepare peer-to-peer network, 4 seconds before genesis time
 	time.Sleep(genesisTime.Add(-4 * time.Second).Sub(time.Now()))
 	if !n.prepare() {
 		panic("Initialization failed !")
 	}
 
-	// Wait for genesis
+	// Wait for genesis time
 	time.Sleep(genesisTime.Sub(time.Now()))
 
 	n.consensus.start(genesisTime)
