@@ -10,6 +10,7 @@ import (
 	"github.com/hdac-io/simulator/bls"
 	"github.com/hdac-io/simulator/config"
 	"github.com/hdac-io/simulator/node"
+	"github.com/hdac-io/simulator/node/status"
 	log "github.com/inconshreveable/log15"
 )
 
@@ -66,5 +67,24 @@ func main() {
 		go node.Start(genesisTime, &wg)
 	}
 
+	// For analysis, do not wait this goroutine
+	startAnalyze(logger, genesisTime)
+
 	wg.Wait()
+}
+
+func startAnalyze(logger log.Logger, genesisTime time.Time) {
+	status.Analysis.Enabled = true
+
+	go func() {
+		// Wait for genesis time
+		time.Sleep(genesisTime.Sub(time.Now()))
+
+		for {
+			time.Sleep(5 * time.Second)
+			status.Analysis.Lock()
+			logger.Crit("Laziest finalized time", "time", status.Analysis.LaziestFinalizedTime)
+			status.Analysis.Unlock()
+		}
+	}()
 }
