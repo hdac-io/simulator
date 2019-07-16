@@ -6,9 +6,7 @@ import (
 
 // Config contains various configuration
 type Config struct {
-	Consensus     *consensusConfig
-	NumValidators int // Number of validators
-	NumNodes      int // Number of non-validator nodes
+	Consensus *consensusConfig
 }
 
 type consensusConfig struct {
@@ -24,8 +22,6 @@ func GetDefault() *Config {
 	}
 
 	return &Config{
-		Consensus:     &c,
-		NumValidators: 21,
-		NumNodes:      0,
+		Consensus: &c,
 	}
 }

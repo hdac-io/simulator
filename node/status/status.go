@@ -24,7 +24,6 @@ type Status struct {
 	finalizedHeight int
 	confirmedHeight int
 	height          int
-	GetRandom       func() int
 	blocks          []block.Block
 
 	// Persistent
@@ -34,8 +33,8 @@ type Status struct {
 	logger log.Logger
 }
 
-func randomSignature(unique int, max int) func() int {
-	seed := int64(time.Now().Nanosecond() + unique)
+func randomSignature(max int) func() int {
+	seed := int64(time.Now().Nanosecond())
 	random := rand.New(rand.NewSource(seed))
 	return func() int {
 		return random.Intn(max)
@@ -43,9 +42,8 @@ func randomSignature(unique int, max int) func() int {
 }
 
 // New contstructs status
-func New(id int, max int, logger log.Logger) *Status {
+func New(id int64, max int, logger log.Logger) *Status {
 	s := &Status{
-		GetRandom:  randomSignature(id, max),
 		persistent: persistent.New(),
 		logger:     logger,
 	}

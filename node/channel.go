@@ -4,15 +4,19 @@ import (
 	"sync"
 
 	"github.com/hdac-io/simulator/block"
-	"github.com/hdac-io/simulator/network"
+	"github.com/hdac-io/simulator/net"
+	"github.com/hdac-io/simulator/net/loopback"
+	"github.com/hdac-io/simulator/net/tcp"
 	"github.com/hdac-io/simulator/signature"
+	"github.com/hdac-io/simulator/types"
 )
 
 // channel represents inbound and outbound channel
 type channel struct {
 	sync.Mutex
-	address network.Address
-	peers   map[network.Address]*peer
+	id    types.ID
+	tcp   net.Network
+	peers map[net.Address]*peer
 
 	// for inbound
 	block     chan block.Block
@@ -20,21 +24,21 @@ type channel struct {
 }
 
 type peer struct {
-	network network.Network
+	connection net.Connection
 }
 
-func newPeer(network network.Network) *peer {
+func newPeer(network net.Connection) *peer {
 	return &peer{
-		network: network,
+		connection: network,
 	}
 }
 
 // newChannel construct channel
-func newChannel() *channel {
+func newChannel(myaddr address) *channel {
 	c := channel{
-		//address:   network.NewVirtualAddress(),
-		address:   network.NewTCPAddress(),
-		peers:     make(map[network.Address]*peer),
+		id:        myaddr.ID,
+		tcp:       tcp.New(myaddr.Address),
+		peers:     make(map[net.Address]*peer),
 		block:     make(chan block.Block, 1024),
 		signature: make(chan signature.Signature, 1024),
 	}
@@ -45,32 +49,45 @@ func newChannel() *channel {
 	return &c
 }
 
-var local network.Network
+func (c *channel) addKnownPeers(addressbook Addressbook) {
+	// Add loopback
+	loopback := loopback.New()
+	connection := loopback.Connect("loopback")
+	peer := newPeer(connection)
+	c.setPeer(peer)
 
-func (c *channel) addPeer(destination network.Address) {
+	// FIXME
+	// Node has higher ID connect to nodes have lower ID
+	for id, address := range addressbook {
+		if id != address.ID {
+			panic("Invalid address !")
+		}
+		if address.ID < c.id {
+			c.addPeer(address.Address)
+		}
+	}
+}
+
+func (c *channel) addPeer(destination net.Address) {
 	_, exist := c.peers[destination]
 	if exist {
 		return
 	}
 
-	dest := c.address.Connect(destination)
+	dest := c.tcp.Connect(destination)
 	peer := newPeer(dest)
 	c.setPeer(peer)
 }
 
 func (c *channel) sendSignature(sign signature.Signature) {
-	// FIXME: loopback
-	c.signature <- sign
 	for _, peer := range c.peers {
-		peer.network.Write(sign)
+		peer.connection.Write(sign)
 	}
 }
 
 func (c *channel) sendBlock(b block.Block) {
-	// FIXME: loopback
-	c.block <- b
 	for _, peer := range c.peers {
-		peer.network.Write(b)
+		peer.connection.Write(b)
 	}
 }
 
@@ -85,7 +102,7 @@ func (c *channel) readBlock() block.Block {
 func (c *channel) startConnectionListner() {
 	go func() {
 		for {
-			dest := c.address.Listen()
+			dest := c.tcp.Accept()
 			peer := newPeer(dest)
 			c.setPeer(peer)
 		}
@@ -93,7 +110,7 @@ func (c *channel) startConnectionListner() {
 }
 
 func (c *channel) setPeer(p *peer) {
-	address := p.network.GetAddress()
+	address := p.connection.GetAddress()
 	// FIXME: very naive locking mechanism
 	c.Lock()
 	_, exist := c.peers[address]
@@ -103,7 +120,7 @@ func (c *channel) setPeer(p *peer) {
 		// Start reader
 		go func() {
 			for {
-				load := p.network.Read()
+				load := p.connection.Read()
 				switch v := load.(type) {
 				case block.Block:
 					c.block <- v
@@ -112,6 +129,8 @@ func (c *channel) setPeer(p *peer) {
 				}
 			}
 		}()
+	} else {
+		panic("Cannot enter here !")
 	}
 	c.Unlock()
 }
