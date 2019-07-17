@@ -15,7 +15,7 @@ import (
 type channel struct {
 	sync.Mutex
 	id    types.ID
-	tcp   net.Network
+	tcp   tcp.Network
 	peers map[net.Address]*peer
 
 	// for inbound
@@ -51,7 +51,6 @@ func newChannel(myaddr address) *channel {
 
 func (c *channel) addKnownPeers(addressbook Addressbook) {
 	// Add loopback
-	loopback := loopback.New()
 	connection := loopback.Connect("loopback")
 	peer := newPeer(connection)
 	c.setPeer(peer)
@@ -78,7 +77,7 @@ func (c *channel) addPeer(destination net.Address) {
 	}
 	c.Unlock()
 
-	dest := c.tcp.Connect(destination)
+	dest := tcp.Connect(destination)
 	peer := newPeer(dest)
 	c.setPeer(peer)
 }

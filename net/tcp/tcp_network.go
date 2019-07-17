@@ -6,18 +6,19 @@ import (
 	mynet "github.com/hdac-io/simulator/net"
 )
 
-type network struct {
+// Network represents TCP network
+type Network struct {
 	address  *net.TCPAddr
 	listener net.Listener
 }
 
 // New construct Network struct
-func New(address mynet.Address) mynet.Network {
+func New(address mynet.Address) Network {
 	addr, err := net.ResolveTCPAddr("tcp", address.(string))
 	if err != nil {
 		panic(err)
 	}
-	network := network{
+	network := Network{
 		address: addr,
 	}
 	// FIXME: error handling
@@ -30,15 +31,15 @@ func New(address mynet.Address) mynet.Network {
 	return network
 }
 
-// Listen waits connection request
-func (n network) Accept() mynet.Connection {
+// Accept waits connection request
+func (n Network) Accept() mynet.Connection {
 	// FIXME: error handling
 	conn, err := n.listener.Accept()
 	if err != nil {
 		panic(err)
 	}
 
-	remoteAddress := network{
+	remoteAddress := Network{
 		address: conn.RemoteAddr().(*net.TCPAddr),
 	}
 
@@ -46,7 +47,7 @@ func (n network) Accept() mynet.Connection {
 }
 
 // Connect construct connection to destination
-func (n network) Connect(destination mynet.Address) mynet.Connection {
+func Connect(destination mynet.Address) mynet.Connection {
 	conn, err := net.Dial("tcp", destination.(string))
 	// FIXME: error handling
 	if err != nil {
