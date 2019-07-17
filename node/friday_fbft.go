@@ -1,12 +1,12 @@
 package node
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/hdac-io/simulator/block"
+	fridaytypes "github.com/hdac-io/simulator/types"
 	"github.com/hdac-io/simulator/vrfmessage"
 )
 
@@ -45,55 +45,15 @@ func (f *fridayFBFT) produceLoop(genesisTime time.Time) {
 func (f *fridayFBFT) validationLoop() {
 	if f.node.parameter.lenULB == 0 {
 		for {
-			block := f.node.peer.readBlock()
+			block := f.node.channel.readBlock()
 			f.validateBlock(block)
 		}
 	} else {
 		for {
-			block := f.node.peer.readBlock()
+			block := f.node.channel.readBlock()
 			go f.validateBlock(block)
 		}
 	}
-}
-
-func (f *fridayFBFT) makeVRFMessage(blockHash [32]byte, height int) vrfmessage.VRFMessage {
-	rand, proof := f.node.privKey.Evaluate(blockHash[:])
-	message := vrfmessage.VRFMessage{
-		Rand:                   rand,
-		Proof:                  proof,
-		PreviousProposerID:     f.node.id,
-		PreviousProposerPubkey: f.node.pubKey,
-		PreviousBlockHeight:    height,
-	}
-	return message
-}
-
-func (f *fridayFBFT) validateVRFMessage(message vrfmessage.VRFMessage) error {
-
-	if message.PreviousBlockHeight != f.node.status.GetHeight()-1 {
-		return errors.New("received previousBlockHeight is not equal then validator local height-1")
-	}
-
-	var targetHash [32]byte
-	targetBlock, _ := f.node.status.GetBlock(message.PreviousBlockHeight)
-	targetHash = targetBlock.Hash
-	proofRand, err := message.PreviousProposerPubkey.ProofToHash(
-		targetHash[:],
-		message.Proof)
-	if proofRand != message.Rand || err != nil {
-		return errors.New("verify failed of received rand into vrfMessage")
-	}
-
-	return nil
-}
-
-func (f *fridayFBFT) calculateBPIDByVRF(message vrfmessage.VRFMessage) int {
-	//TODO::check overflow when based 32bit system
-	so := int(binary.LittleEndian.Uint32(message.Rand[:]))
-	chosenNumber := so % f.node.parameter.numValidators
-	f.node.logger.Debug("received vrf-rand to chosenNumber", "so", so, "chosenNumber", chosenNumber)
-
-	return chosenNumber
 }
 
 func (f *fridayFBFT) getVRFMessage(blockHeight int) vrfmessage.VRFMessage {
@@ -109,8 +69,8 @@ func (f *fridayFBFT) getVRFMessage(blockHeight int) vrfmessage.VRFMessage {
 	return vrfMessage
 }
 
-func (f *fridayFBFT) getBlockProducerIDByHeight(height int) int {
-	var chosenNumber int
+func (f *fridayFBFT) getBlockProducerIDByHeight(height int) fridaytypes.ID {
+	var chosenNumber fridaytypes.ID
 	if height != 0 {
 		//getting VRFMessage by previous block body
 		vrfMessage := f.getVRFMessage(height)
@@ -118,7 +78,8 @@ func (f *fridayFBFT) getBlockProducerIDByHeight(height int) int {
 		//validate VRFMessage
 		//bypass validate when produced genesis block
 		if vrfMessage.PreviousBlockHeight != 0 {
-			vrfErr := f.validateVRFMessage(vrfMessage)
+			targetBlock, _ := f.node.status.GetBlock(vrfMessage.PreviousBlockHeight)
+			vrfErr := vrfMessage.Validate(targetBlock.Hash)
 			if vrfErr != nil {
 				f.node.logger.Crit(vrfErr.Error())
 				//TODO::replace to decide next action when invalid VRF situation
@@ -127,11 +88,11 @@ func (f *fridayFBFT) getBlockProducerIDByHeight(height int) int {
 		}
 
 		//calculate BP ID by VRF
-		chosenNumber = f.calculateBPIDByVRF(vrfMessage)
+		chosenNumber = vrfMessage.CalculateBPID(f.node.parameter.numValidators)
 	} else {
 		//TODO::FIXME refectoring to initializeGenesisBlock
 		//when firstly producing genesis block, cannot have previous block status
-		chosenNumber = 0
+		chosenNumber = fridaytypes.ID(1)
 	}
 
 	return chosenNumber
@@ -142,7 +103,7 @@ func (f *fridayFBFT) produce(nextBlockTime time.Time) time.Time {
 	chosenNumber := f.getBlockProducerIDByHeight(f.node.status.GetHeight())
 
 	// next := 0 if there is no completed block
-	f.node.next = chosenNumber
+	f.node.next = fridaytypes.ID(chosenNumber)
 
 	if f.node.next != f.node.id {
 		// Not my turn
@@ -153,18 +114,18 @@ func (f *fridayFBFT) produce(nextBlockTime time.Time) time.Time {
 		var vrf vrfmessage.VRFMessage
 		if f.node.status.GetHeight() != 0 {
 			//make vrf by previous block
-			vrf = f.makeVRFMessage(f.node.status.GetRecentBlock().Hash, f.node.status.GetHeight())
+			vrf = vrfmessage.New(f.node.privKey, f.node.pubKey, f.node.id, f.node.status.GetRecentBlock().Hash, f.node.status.GetHeight())
 		} else {
 			//TODO::FIXME refectoring to initializeGenesisBlock
 			//for producing genesis block
-			vrf = f.makeVRFMessage([32]byte{0}, 0)
+			vrf = vrfmessage.New(f.node.privKey, f.node.pubKey, f.node.id, [32]byte{0}, 0)
 		}
 
 		// Produce new block
 		newBlock := block.New(f.node.status.GetHeight()+1, nextBlockTime.UnixNano(), f.node.id, vrf)
 
 		// Pre-prepare / send new block
-		f.node.peer.sendBlock(newBlock)
+		f.node.channel.sendBlock(newBlock)
 		f.node.logger.Info("Block produced", "Height", newBlock.Header.Height, "Producer", newBlock.Header.Producer,
 			"Timestmp", time.Unix(0, newBlock.Header.Timestamp), "Hash", hex.EncodeToString(newBlock.Hash[:]))
 
