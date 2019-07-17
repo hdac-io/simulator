@@ -1,8 +1,8 @@
 package bls
 
 /*
-#cgo CFLAGS:-DMCLBN_FP_UNIT_SIZE=6 -DMCLBN_FR_UNIT_SIZE=4
-#cgo LDFLAGS:-lbls384_256 -L /usr/local/opt/openssl/lib -lcrypto -lgmp -lgmpxx -lstdc++
+#cgo CFLAGS:-DMCLBN_FP_UNIT_SIZE=6 -DMCLBN_FR_UNIT_SIZE=4 -I /home/caramis/local/include
+#cgo LDFLAGS:-lbls384_256 -L /usr/local/opt/openssl/lib -L /home/caramis/local/lib -lcrypto -lgmp -lgmpxx -lstdc++ -lmcl
 typedef unsigned int (*ReadRandFunc)(void *, void *, unsigned int);
 int wrapReadRandCgo(void *self, void *buf, unsigned int n);
 #include <bls/bls.h>
