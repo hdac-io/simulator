@@ -1,13 +1,9 @@
 package node
 
 import (
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"time"
-
-	"github.com/google/keytransparency/core/crypto/vrf"
-	"github.com/google/keytransparency/core/crypto/vrf/p256"
 
 	"github.com/hdac-io/simulator/block"
 	"github.com/hdac-io/simulator/bls"
@@ -54,61 +50,6 @@ func (f *fridayVRF) validationLoop() {
 	}
 }
 
-// VRF serialize and deserialize
-func serialize(pkey vrf.PublicKey) []byte {
-	pk := pkey.(*p256.PublicKey)
-	return append(pk.PublicKey.X.Bytes(), pk.PublicKey.Y.Bytes()...)
-}
-
-func deserialize(data []byte) vrf.PublicKey {
-	_, pkey := p256.GenerateKey()
-	pk := pkey.(*p256.PublicKey)
-	pk.X.SetBytes(data[:len(data)/2])
-	pk.Y.SetBytes(data[len(data)/2:])
-
-	return pk
-}
-
-func (f *fridayVRF) makeVRFMessage(blockHash [32]byte, height int) vrfmessage.VRFMessage {
-	rand, proof := f.node.privKey.Evaluate(blockHash[:])
-	message := vrfmessage.VRFMessage{
-		Rand:                   rand,
-		Proof:                  proof,
-		PreviousProposerID:     f.node.id,
-		PreviousProposerPubkey: serialize(f.node.pubKey),
-		PreviousBlockHeight:    height,
-	}
-	return message
-}
-
-func (f *fridayVRF) validateVRFMessage(message vrfmessage.VRFMessage) error {
-
-	if message.PreviousBlockHeight != f.node.status.GetHeight()-1 {
-		return errors.New("Received previousBlockHeight is not equal then validator local height-1")
-	}
-	var targetHash [32]byte
-	targetBlock, _ := f.node.status.GetBlock(message.PreviousBlockHeight)
-	targetHash = targetBlock.Hash
-	pubkey := deserialize(message.PreviousProposerPubkey)
-	proofRand, err := pubkey.ProofToHash(
-		targetHash[:],
-		message.Proof)
-	if proofRand != message.Rand || err != nil {
-		return errors.New("Verify failed of received rand into vrfMessage")
-	}
-
-	return nil
-}
-
-func (f *fridayVRF) calculateBPIDByVRF(message vrfmessage.VRFMessage) int {
-	// TODO::check overflow when based 32bit system
-	so := int(binary.LittleEndian.Uint32(message.Rand[:]))
-	chosenNumber := so%f.node.parameter.numValidators + 1
-	f.node.logger.Debug("Calculate next validator", "Next validator", chosenNumber)
-
-	return chosenNumber
-}
-
 func (f *fridayVRF) getVRFMessage(blockHeight int) vrfmessage.VRFMessage {
 	var vrfMessage vrfmessage.VRFMessage
 
@@ -123,7 +64,7 @@ func (f *fridayVRF) getVRFMessage(blockHeight int) vrfmessage.VRFMessage {
 }
 
 func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
-	var chosenNumber int
+	var chosenNumber types.ID
 	if f.node.status.GetHeight() != 0 {
 		// Getting VRFMessage by previous block body
 		vrfMessage := f.getVRFMessage(f.node.status.GetHeight())
@@ -131,7 +72,8 @@ func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
 		// Validate VRFMessage
 		// Bypass validate when produced genesis block
 		if vrfMessage.PreviousBlockHeight != 0 {
-			vrfErr := f.validateVRFMessage(vrfMessage)
+			targetBlock, _ := f.node.status.GetBlock(vrfMessage.PreviousBlockHeight)
+			vrfErr := vrfMessage.Validate(targetBlock.Hash)
 			if vrfErr != nil {
 				f.node.logger.Crit(vrfErr.Error())
 				// TODO::replace to decide next action when invalid VRF situation
@@ -140,15 +82,15 @@ func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
 		}
 
 		// Calculate BP ID by VRF
-		chosenNumber = f.calculateBPIDByVRF(vrfMessage)
+		chosenNumber = vrfMessage.CalculateBPID(f.node.parameter.numValidators)
 	} else {
 		// TODO::FIXME refectoring to initializeGenesisBlock
 		// When firstly producing genesis block, cannot have previous block status
-		chosenNumber = 1
+		chosenNumber = types.ID(1)
 	}
 
 	// next := 0 if there is no completed block
-	f.node.next = types.ID(chosenNumber)
+	f.node.next = chosenNumber
 
 	if f.node.next != f.node.id {
 		// Not my turn
@@ -159,11 +101,11 @@ func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
 		var vrf vrfmessage.VRFMessage
 		if f.node.status.GetHeight() != 0 {
 			// Make vrf by previous block
-			vrf = f.makeVRFMessage(f.node.status.GetRecentBlock().Hash, f.node.status.GetHeight())
+			vrf = vrfmessage.New(f.node.privKey, f.node.pubKey, f.node.id, f.node.status.GetRecentBlock().Hash, f.node.status.GetHeight())
 		} else {
 			// TODO::FIXME refectoring to initializeGenesisBlock
 			// for producing genesis block
-			vrf = f.makeVRFMessage([32]byte{0}, 0)
+			vrf = vrfmessage.New(f.node.privKey, f.node.pubKey, f.node.id, [32]byte{0}, 0)
 		}
 
 		// Produce new block
