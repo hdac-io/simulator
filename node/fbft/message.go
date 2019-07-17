@@ -4,20 +4,37 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/json"
 
 	"github.com/hdac-io/simulator/bls"
 )
 
-//Send by Leader
+func mashalSignAndPubkey(sign bls.Sign, key bls.PublicKey) []byte {
+	mashaledJSON, _ := json.Marshal([]string{sign.SerializeToHexStr(), key.SerializeToHexStr()})
+	return mashaledJSON
+}
+func unmashalSignAndPubkey(payload []byte) (sign bls.Sign, key bls.PublicKey, err error) {
 
-//PreparedMessage is aggregated result by received PrepareMessages
-type PreparedMessage struct {
-	AggregatedSign   bls.Sign
-	AggregatedPubKey bls.PublicKey
+	var serializedHexStrs []string
+	err = json.Unmarshal(payload, &serializedHexStrs)
+	if err == nil {
+		err = sign.DeserializeHexStr(serializedHexStrs[0])
+	}
+	if err == nil {
+		err = key.DeserializeHexStr(serializedHexStrs[1])
+	}
+
+	return sign, key, err
+}
+
+// Message used for Prepare, Prepared, Commit, Commited
+type Message struct {
+	Sign   bls.Sign
+	Pubkey bls.PublicKey
 }
 
 //Hash receiver method is message to sha256 hash
-func (message *PreparedMessage) Hash() [32]byte {
+func (message *Message) Hash() [32]byte {
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
 	encoder.Encode(message)
@@ -25,22 +42,14 @@ func (message *PreparedMessage) Hash() [32]byte {
 	return sha256.Sum256(buf.Bytes())
 }
 
-//CommitedMessage is aggregated result by received CommitMessage
-type CommitedMessage struct {
-	AggregatedSign   bls.Sign
-	AggregatedPubKey bls.PublicKey
+// Serialize return mashared json message
+func (message *Message) Serialize() []byte {
+	return mashalSignAndPubkey(message.Sign, message.Pubkey)
 }
 
-//Send by Validators
-
-//PrepareMessage is sign for received block
-type PrepareMessage struct {
-	Sign      bls.Sign
-	PublicKey bls.PublicKey
-}
-
-//CommitMessage is sign for received PreparedMessage
-type CommitMessage struct {
-	Sign      bls.Sign
-	PublicKey bls.PublicKey
+// Deserialize return unmashared json message
+func (message *Message) Deserialize(payload []byte) error {
+	var err error
+	message.Sign, message.Pubkey, err = unmashalSignAndPubkey(payload)
+	return err
 }
