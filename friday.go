@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -14,7 +13,7 @@ import (
 	log "github.com/inconshreveable/log15"
 )
 
-const defaultIP = "127.0.0.1:0"
+const defaultIP = "127.0.0.1"
 
 func main() {
 	// Set my TCP address
@@ -22,7 +21,7 @@ func main() {
 	if len(os.Args) > 1 {
 		address = os.Args[1]
 	}
-	myIP, err := net.ResolveTCPAddr("tcp", address)
+	nodeAddress, err := net.ResolveTCPAddr("tcp", address+":0")
 	if err != nil {
 		panic(err)
 	}
@@ -34,7 +33,6 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(time)
 		genesisTime = time
 	}
 
@@ -42,7 +40,8 @@ func main() {
 	bls.Init(bls.CurveFp254BNb)
 
 	logger := log.New("module", "main")
-	logger.Info("Initialize Validators and Addressbooks")
+	logger.Info("Node information", "IP address", nodeAddress.IP, "Genesis time", genesisTime.String())
+	logger.Info("Initialize validators and addressbook")
 
 	// prepare addressbook
 	addressbook := node.PrepareAddressbook()
@@ -54,7 +53,7 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if ip.IP.Equal(myIP.IP) {
+		if ip.IP.Equal(nodeAddress.IP) {
 			// FIXME: we should copy addressbook for runtime modification by nodes
 			nodes = append(nodes, node.NewValidator(address.ID, addressbook, config.Consensus.LenULB, config.Consensus.BlockTime))
 		}
