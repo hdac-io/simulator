@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/keytransparency/core/crypto/vrf"
 	"github.com/google/keytransparency/core/crypto/vrf/p256"
 
 	"github.com/hdac-io/simulator/block"
@@ -53,13 +54,28 @@ func (f *fridayVRF) validationLoop() {
 	}
 }
 
+// VRF serialize and deserialize
+func serialize(pkey vrf.PublicKey) []byte {
+	pk := pkey.(*p256.PublicKey)
+	return append(pk.PublicKey.X.Bytes(), pk.PublicKey.Y.Bytes()...)
+}
+
+func deserialize(data []byte) vrf.PublicKey {
+	_, pkey := p256.GenerateKey()
+	pk := pkey.(*p256.PublicKey)
+	pk.X.SetBytes(data[:len(data)/2])
+	pk.Y.SetBytes(data[len(data)/2:])
+
+	return pk
+}
+
 func (f *fridayVRF) makeVRFMessage(blockHash [32]byte, height int) vrfmessage.VRFMessage {
 	rand, proof := f.node.privKey.Evaluate(blockHash[:])
 	message := vrfmessage.VRFMessage{
 		Rand:                   rand,
 		Proof:                  proof,
 		PreviousProposerID:     f.node.id,
-		PreviousProposerPubkey: f.node.pubKey.Serialize(),
+		PreviousProposerPubkey: serialize(f.node.pubKey),
 		PreviousBlockHeight:    height,
 	}
 	return message
@@ -73,8 +89,7 @@ func (f *fridayVRF) validateVRFMessage(message vrfmessage.VRFMessage) error {
 	var targetHash [32]byte
 	targetBlock, _ := f.node.status.GetBlock(message.PreviousBlockHeight)
 	targetHash = targetBlock.Hash
-	_, pubkey := p256.GenerateKey()
-	pubkey.Deserialize(message.PreviousProposerPubkey)
+	pubkey := deserialize(message.PreviousProposerPubkey)
 	proofRand, err := pubkey.ProofToHash(
 		targetHash[:],
 		message.Proof)
