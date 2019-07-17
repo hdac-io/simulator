@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"net"
+	"strconv"
 
 	mynet "github.com/hdac-io/simulator/net"
 )
@@ -22,7 +23,7 @@ func New(address mynet.Address) Network {
 		address: addr,
 	}
 	// FIXME: error handling
-	listener, err := net.Listen("tcp", addr.String())
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(addr.Port))
 	if err != nil {
 		panic(err)
 	}
