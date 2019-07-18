@@ -55,19 +55,28 @@ func (c *channel) addKnownPeers(addressbook Addressbook) {
 	peer := newPeer(connection)
 	c.setPeer(peer)
 
-	// FIXME
-	// Node has higher ID connect to nodes have lower ID
 	for id, address := range addressbook {
 		if id != address.ID {
 			panic("Invalid address !")
 		}
-		if address.ID < c.id {
-			c.addPeer(address.Address)
-		}
+		c.addPeer(address)
 	}
 }
 
-func (c *channel) addPeer(destination net.Address) {
+func (c *channel) addPeer(peer address) {
+	// FIXME
+	// Node has higher ID connect to nodes have lower ID
+	if peer.ID < c.id {
+		// Connect to the peer
+		c.connectToPeer(peer.Address)
+	} else if peer.ID == c.id {
+		// Loopback is aleady connected
+	} else {
+		// Just wait since the peer will connect to us
+	}
+}
+
+func (c *channel) connectToPeer(destination net.Address) {
 	// FIXME: very naive locking mechanism
 	c.Lock()
 	_, exist := c.peers[destination]
