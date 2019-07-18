@@ -65,7 +65,7 @@ func (f *fridayFBFT) finalizeValidatorPhase(b block.Block, preparedMessage fbft.
 	}
 	commitTx := signature.New(f.node.id, signature.Commit, b.Header.Height, toSendMessage.Serialize())
 	f.node.channel.sendSignature(commitTx)
-	f.node.logger.Info("send prepare messsage", "blockheight", b.Header.Height)
+	f.node.logger.Info("send commit messsage", "blockheight", b.Header.Height)
 
 	return nil
 }

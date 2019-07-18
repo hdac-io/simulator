@@ -10,6 +10,8 @@ import (
 )
 
 func (f *fridayFBFT) prepareLeaderPhase(b block.Block) (fbft.Message, error) {
+	f.node.logger.Debug("Enter prepareLeaderPhase", "blockHeight", b.Header.Height)
+
 	//Prepare Phase
 	toSendMessage := fbft.Message{}
 
@@ -51,6 +53,7 @@ func (f *fridayFBFT) prepareLeaderPhase(b block.Block) (fbft.Message, error) {
 }
 
 func (f *fridayFBFT) finalizeLeaderPhase(b block.Block, preparedMessage fbft.Message) ([]signature.Signature, error) {
+	f.node.logger.Debug("Enter finalizeLeaderPhase", "blockHeight", b.Header.Height)
 	//Commit Phase
 	toSendMessage := fbft.Message{}
 
