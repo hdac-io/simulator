@@ -204,7 +204,6 @@ func (f *fridayVRF) validate(b block.Block) error {
 	// FIXME: we should wait next validator calculation
 	for f.node.next == 0 {
 		time.Sleep(10 * time.Millisecond)
-
 	}
 
 	// Validate producer
