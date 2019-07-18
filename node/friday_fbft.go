@@ -164,6 +164,11 @@ func (f *fridayFBFT) validateBlock(b block.Block) {
 
 // FIXME: We assume that there is no byzantine nodes
 func (f *fridayFBFT) validate(b block.Block) error {
+	// FIXME: we should wait next validator calculation
+	for f.node.next == 0 {
+		time.Sleep(10 * time.Millisecond)
+
+	}
 	// Validate producer
 	if f.node.next != b.Header.Producer {
 		return errors.New("cannot matched between f.node.next to block.Header.Producer")
@@ -173,6 +178,9 @@ func (f *fridayFBFT) validate(b block.Block) error {
 	if b.Hash != block.CalculateHashFromBlock(b) {
 		return errors.New("cannot invalid block hash")
 	}
+
+	// FIXME: we should wait next validator calculation
+	f.node.next = 0
 
 	return nil
 }
