@@ -24,19 +24,6 @@
 #   go-tests = true
 #   unused-packages = true
 
-
-[[constraint]]
-  name = "github.com/go-stack/stack"
-  version = "1.8.0"
-
-[[constraint]]
-  name = "github.com/mattn/go-colorable"
-  version = "0.1.2"
-
-[[constraint]]
-  name = "github.com/mattn/go-isatty"
-  version = "0.0.8"
-
 [prune]
   go-tests = true
   unused-packages = true
