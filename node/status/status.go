@@ -73,6 +73,10 @@ var Analysis struct {
 	Enabled bool
 	// LaziestFinalizedTime contains laziest finalized time
 	LaziestFinalizedTime time.Duration
+	// FastestFinalizedTime contains average finalized time
+	FastestFinalizedTime time.Duration
+	// AverageFinalizedTime contains average finalized time
+	AverageFinalizedTime time.Duration
 }
 
 // Finalize finalizing specified block
@@ -103,9 +107,14 @@ func (s *Status) Finalize(b block.Block, signs []signature.Signature) {
 		blockTime := time.Unix(0, b.Header.Timestamp)
 		finalizedTime := time.Now().Sub(blockTime)
 		Analysis.Lock()
+		if Analysis.FastestFinalizedTime > finalizedTime {
+			Analysis.FastestFinalizedTime = finalizedTime
+		}
 		if Analysis.LaziestFinalizedTime < finalizedTime {
 			Analysis.LaziestFinalizedTime = finalizedTime
 		}
+		Analysis.AverageFinalizedTime =
+			time.Duration((Analysis.AverageFinalizedTime.Nanoseconds()*int64(b.Header.Height-1)+finalizedTime.Nanoseconds())/int64(b.Header.Height)) * time.Nanosecond
 		Analysis.Unlock()
 	}
 }

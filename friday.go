@@ -74,6 +74,7 @@ func main() {
 
 func startAnalyze(logger log.Logger, genesisTime time.Time) {
 	status.Analysis.Enabled = true
+	status.Analysis.FastestFinalizedTime = time.Duration(10) * time.Second
 
 	go func() {
 		// Wait for genesis time
@@ -82,7 +83,9 @@ func startAnalyze(logger log.Logger, genesisTime time.Time) {
 		for {
 			time.Sleep(5 * time.Second)
 			status.Analysis.Lock()
+			logger.Crit("Fastest finalized time", "time", status.Analysis.FastestFinalizedTime)
 			logger.Crit("Laziest finalized time", "time", status.Analysis.LaziestFinalizedTime)
+			logger.Crit("Average finalized time", "time", status.Analysis.AverageFinalizedTime)
 			status.Analysis.Unlock()
 		}
 	}()
