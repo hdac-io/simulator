@@ -18,9 +18,10 @@ type BlockHeader struct {
 
 // Block represents simple block structure
 type Block struct {
-	Header BlockHeader
-	Hash   [32]byte
-	VRF    vrfmessage.VRFMessage
+	Header  BlockHeader
+	Hash    [32]byte
+	VRF     vrfmessage.VRFMessage
+	Padding []byte
 }
 
 // New constructs block
@@ -31,7 +32,8 @@ func New(height int, timestamp int64, producer types.ID, vrf vrfmessage.VRFMessa
 			Timestamp: timestamp,
 			Producer:  producer,
 		},
-		VRF: vrf,
+		VRF:     vrf,
+		Padding: make([]byte, 50*1024),
 	}
 	b.Hash = CalculateHashFromBlock(b)
 

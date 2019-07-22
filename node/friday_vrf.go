@@ -89,6 +89,8 @@ func (f *fridayVRF) produce(nextBlockTime time.Time) time.Time {
 		chosenNumber = types.ID(1)
 	}
 
+	f.node.logger.Info("Chosen number", "Number", chosenNumber)
+
 	// next := 0 if there is no completed block
 	f.node.next = chosenNumber
 
@@ -150,6 +152,8 @@ func (f *fridayVRF) validate(b block.Block) error {
 
 	// Validate producer
 	if f.node.next != b.Header.Producer {
+		f.node.logger.Info("Producer mismatch", "Elected", f.node.next, "Received", b.Header.Producer)
+		f.node.logger.Info("Producer mismatch", "Height", f.node.status.GetHeight(), "Received", b.Header.Height)
 		return errors.New("Invalid producer")
 	}
 

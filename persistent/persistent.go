@@ -20,11 +20,16 @@ func New() Persistent {
 }
 
 // AddBlock stores block
-func (p *Persistent) AddBlock(block block.Block) {
-	if len(p.blocks) != block.Header.Height-1 {
+func (p *Persistent) AddBlock(b block.Block) {
+	if len(p.blocks) != b.Header.Height-1 {
 		panic("Wrong block height !")
 	}
-	p.blocks = append(p.blocks, block)
+	newBlock := block.Block{
+		Header: b.Header,
+		Hash:   b.Hash,
+		VRF:    b.VRF,
+	}
+	p.blocks = append(p.blocks, newBlock)
 }
 
 // GetBlock retrieves block
