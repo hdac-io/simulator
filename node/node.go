@@ -76,7 +76,7 @@ func New(id types.ID, addressbook Addressbook, lenULB int) *Node {
 	}
 	n.status = status.New(int64(id), len(addressbook), n.logger)
 	// FIXME: configurable
-	n.consensus = newFridayVRF(n)
+	n.consensus = newFridayFBFT(n)
 
 	return n
 }
