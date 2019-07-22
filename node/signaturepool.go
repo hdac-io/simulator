@@ -53,7 +53,7 @@ func (s *signaturepool) waitAndRemove(kind signature.Kind, height int, number in
 	if sig.target != -1 {
 		panic("Must not enter here !")
 	}
-	sig.target = number
+	sig.target = (number/3)*2 + 1
 	for sig.target > 0 && sig.target > len(sig.signatures) {
 		sig.cond.Wait()
 	}
