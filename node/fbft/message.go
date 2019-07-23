@@ -37,7 +37,7 @@ type Message struct {
 func (message *Message) Hash() [32]byte {
 	var buf bytes.Buffer
 	encoder := gob.NewEncoder(&buf)
-	encoder.Encode(message)
+	encoder.Encode(message.Serialize())
 
 	return sha256.Sum256(buf.Bytes())
 }
